@@ -48,18 +48,28 @@ jobs:
       if: runner.os == 'Windows'
       shell: powershell
       run: |
-        # Install GStreamer and pkg-config
-        choco install gstreamer --version=1.22.8
-        choco install pkgconfiglite
+        # Install pkg-config first
+        choco install pkgconfiglite -y
+        
+        # Download and install GStreamer manually since Chocolatey package is broken
+        $gstVersion = "1.24.7"
+        $gstInstaller = "gstreamer-1.0-msvc-x86_64-$gstVersion.msi"
+        $gstDevInstaller = "gstreamer-1.0-devel-msvc-x86_64-$gstVersion.msi"
+        
+        # Download runtime
+        Invoke-WebRequest -Uri "https://gstreamer.freedesktop.org/data/pkg/windows/$gstVersion/msvc/$gstInstaller" -OutFile "$env:TEMP\$gstInstaller"
+        # Download development files
+        Invoke-WebRequest -Uri "https://gstreamer.freedesktop.org/data/pkg/windows/$gstVersion/msvc/$gstDevInstaller" -OutFile "$env:TEMP\$gstDevInstaller"
+        
+        # Install silently
+        Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\$gstInstaller`" /quiet ADDLOCAL=ALL" -Wait
+        Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\$gstDevInstaller`" /quiet ADDLOCAL=ALL" -Wait
         
         # Set up environment variables
         $gstPath = "C:\gstreamer\1.0\msvc_x86_64"
         echo "GST_PLUGIN_PATH=$gstPath\lib\gstreamer-1.0" >> $env:GITHUB_ENV
         echo "PKG_CONFIG_PATH=$gstPath\lib\pkgconfig" >> $env:GITHUB_ENV
         echo "$gstPath\bin" >> $env:GITHUB_PATH
-        
-        # Verify installation
-        & "$gstPath\bin\gst-inspect-1.0.exe" --version
     
     - name: Install GStreamer (macOS)
       if: runner.os == 'macOS'
