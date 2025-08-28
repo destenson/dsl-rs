@@ -1,3 +1,4 @@
+#![allow(unused)]
 pub mod core;
 pub mod health;
 pub mod isolation;
