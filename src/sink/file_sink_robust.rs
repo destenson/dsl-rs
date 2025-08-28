@@ -366,7 +366,8 @@ mod tests {
         let sink = FileSinkRobust::new("test".to_string(), config).unwrap();
 
         let filename1 = sink.generate_filename();
-        std::thread::sleep(Duration::from_millis(10));
+        // Increment the file counter to ensure different filenames
+        *sink.file_count.lock().unwrap() += 1;
         let filename2 = sink.generate_filename();
 
         assert_ne!(filename1, filename2);

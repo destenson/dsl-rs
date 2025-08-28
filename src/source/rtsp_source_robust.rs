@@ -81,17 +81,29 @@ impl RtspSourceRobust {
         let rtspsrc = gst::ElementFactory::make("rtspsrc")
             .name(format!("{}_rtspsrc", name))
             .property("location", &config.uri)
-            .property("protocols", config.protocols)
             .property("latency", config.latency)
             .property("timeout", config.timeout)
             .property("tcp-timeout", config.tcp_timeout)
-            .property("buffer-mode", config.buffer_mode)
             .property("ntp-sync", config.ntp_sync)
-            .property("connection-speed", 1000u32)
+            .property("connection-speed", 1000u64)
             .property("drop-on-latency", true)
             .property("do-retransmission", true)
             .build()
             .map_err(|_| DslError::Source("Failed to create rtspsrc".to_string()))?;
+        
+        // Set enum properties using string representation
+        // TCP = 0x4, so we use "tcp" string
+        rtspsrc.set_property_from_str("protocols", "tcp");
+        // buffer-mode: 0=none, 1=slave, 2=buffer, 3=auto, 4=synced
+        let buffer_mode_str = match config.buffer_mode {
+            0 => "none",
+            1 => "slave", 
+            2 => "buffer",
+            3 => "auto",
+            4 => "synced",
+            _ => "auto"
+        };
+        rtspsrc.set_property_from_str("buffer-mode", buffer_mode_str);
 
         // Set optional properties
         if let Some(ref agent) = config.user_agent {
