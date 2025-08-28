@@ -1,0 +1,250 @@
+# Chaos Engineering Test Scenarios
+# Simulates various failure conditions and validates system resilience
+
+name: Chaos Engineering Tests
+description: Inject failures and validate system resilience
+
+# Chaos test scenarios
+chaos_tests:
+  - name: network_chaos
+    description: Network-related failure injection
+    type: cargo_test
+    filter: "chaos::network"
+    timeout: 600
+    scenarios:
+      - name: packet_loss
+        env:
+          CHAOS_TYPE: "packet_loss"
+          PACKET_LOSS_PERCENT: "5"
+          DURATION_SECONDS: "60"
+          AFFECTED_STREAMS: "random:50%"
+      
+      - name: latency_injection
+        env:
+          CHAOS_TYPE: "latency"
+          LATENCY_MS: "500"
+          LATENCY_VARIANCE_MS: "100"
+          DURATION_SECONDS: "60"
+          AFFECTED_STREAMS: "all"
+      
+      - name: bandwidth_limitation
+        env:
+          CHAOS_TYPE: "bandwidth"
+          BANDWIDTH_LIMIT_MBPS: "1"
+          DURATION_SECONDS: "120"
+          AFFECTED_STREAMS: "random:30%"
+      
+      - name: connection_drops
+        env:
+          CHAOS_TYPE: "connection_drop"
+          DROP_PROBABILITY: "0.1"
+          RECONNECT_DELAY_MS: "5000"
+          DURATION_SECONDS: "180"
+  
+  - name: resource_chaos
+    description: Resource-related failure injection
+    type: cargo_test
+    filter: "chaos::resource"
+    timeout: 600
+    scenarios:
+      - name: memory_pressure
+        env:
+          CHAOS_TYPE: "memory_pressure"
+          MEMORY_LIMIT_MB: "512"
+          ALLOCATION_RATE_MB_PER_SEC: "10"
+          DURATION_SECONDS: "120"
+      
+      - name: cpu_stress
+        env:
+          CHAOS_TYPE: "cpu_stress"
+          CPU_CORES_TO_STRESS: "2"
+          CPU_LOAD_PERCENT: "90"
+          DURATION_SECONDS: "60"
+      
+      - name: disk_pressure
+        env:
+          CHAOS_TYPE: "disk_pressure"
+          DISK_WRITE_RATE_MB_PER_SEC: "100"
+          DISK_SPACE_LIMIT_MB: "1000"
+          DURATION_SECONDS: "120"
+      
+      - name: file_descriptor_exhaustion
+        env:
+          CHAOS_TYPE: "fd_exhaustion"
+          FD_LEAK_RATE_PER_SEC: "10"
+          MAX_FDS: "1024"
+          DURATION_SECONDS: "60"
+  
+  - name: application_chaos
+    description: Application-level failure injection
+    type: cargo_test
+    filter: "chaos::application"
+    timeout: 600
+    scenarios:
+      - name: random_panics
+        env:
+          CHAOS_TYPE: "panic"
+          PANIC_PROBABILITY: "0.01"
+          PANIC_LOCATIONS: "decoder,encoder,muxer"
+          RECOVERY_REQUIRED: "true"
+      
+      - name: deadlocks
+        env:
+          CHAOS_TYPE: "deadlock"
+          DEADLOCK_PROBABILITY: "0.05"
+          DEADLOCK_TIMEOUT_MS: "5000"
+          RECOVERY_REQUIRED: "true"
+      
+      - name: infinite_loops
+        env:
+          CHAOS_TYPE: "infinite_loop"
+          LOOP_PROBABILITY: "0.01"
+          WATCHDOG_TIMEOUT_MS: "10000"
+          RECOVERY_REQUIRED: "true"
+      
+      - name: memory_leaks
+        env:
+          CHAOS_TYPE: "memory_leak"
+          LEAK_RATE_BYTES_PER_FRAME: "1024"
+          MAX_LEAK_MB: "500"
+          RECOVERY_REQUIRED: "true"
+  
+  - name: data_chaos
+    description: Data corruption and validation
+    type: cargo_test
+    filter: "chaos::data"
+    timeout: 600
+    scenarios:
+      - name: frame_corruption
+        env:
+          CHAOS_TYPE: "frame_corruption"
+          CORRUPTION_PROBABILITY: "0.001"
+          CORRUPTION_SEVERITY: "bit_flip"
+          DETECTION_REQUIRED: "true"
+      
+      - name: timestamp_corruption
+        env:
+          CHAOS_TYPE: "timestamp_corruption"
+          CORRUPTION_PROBABILITY: "0.01"
+          MAX_DRIFT_MS: "1000"
+          CORRECTION_REQUIRED: "true"
+      
+      - name: metadata_loss
+        env:
+          CHAOS_TYPE: "metadata_loss"
+          LOSS_PROBABILITY: "0.05"
+          CRITICAL_METADATA_PROTECTED: "true"
+
+# Failure combinations (multiple simultaneous failures)
+combined_failures:
+  - name: network_and_cpu
+    description: Combined network issues and CPU stress
+    components:
+      - type: network
+        packet_loss: 3
+        latency_ms: 200
+      - type: cpu
+        load_percent: 80
+    duration_seconds: 300
+    expected_behavior: "degraded_performance"
+  
+  - name: memory_and_disk
+    description: Combined memory and disk pressure
+    components:
+      - type: memory
+        limit_mb: 256
+      - type: disk
+        write_rate_mb: 50
+    duration_seconds: 300
+    expected_behavior: "graceful_degradation"
+  
+  - name: cascading_failure
+    description: Initial failure triggering cascade
+    components:
+      - type: stream_failure
+        stream_id: 0
+        failure_type: "crash"
+      - type: resource_spike
+        trigger_after_ms: 1000
+      - type: additional_stream_failures
+        probability: 0.3
+    duration_seconds: 600
+    expected_behavior: "partial_recovery"
+
+# Monkey testing configuration
+monkey_testing:
+  enabled: true
+  duration_minutes: 10
+  actions:
+    - name: add_stream
+      probability: 0.1
+      min_interval_seconds: 5
+    - name: remove_stream
+      probability: 0.1
+      min_interval_seconds: 5
+    - name: restart_stream
+      probability: 0.2
+      min_interval_seconds: 3
+    - name: change_config
+      probability: 0.05
+      min_interval_seconds: 10
+    - name: inject_error
+      probability: 0.15
+      min_interval_seconds: 2
+
+# Recovery validation
+recovery_validation:
+  metrics:
+    - name: mean_time_to_recovery
+      max_seconds: 60
+    - name: data_loss
+      max_percent: 0.1
+    - name: service_availability
+      min_percent: 99.9
+  
+  checks:
+    - all_streams_recovered
+    - no_memory_leaks
+    - no_orphaned_processes
+    - metrics_consistency
+    - state_consistency
+
+# Chaos test matrix
+test_matrix:
+  failure_rates: [0.01, 0.05, 0.1, 0.2]
+  recovery_strategies: ["immediate", "exponential", "circuit_breaker"]
+  stream_counts: [1, 5, 10, 20]
+  durations: [60, 300, 600, 1800]
+
+# Game day scenarios (production-like failure scenarios)
+game_day_scenarios:
+  - name: datacenter_outage
+    description: Simulate datacenter connectivity loss
+    duration_minutes: 30
+    
+  - name: ddos_attack
+    description: Simulate DDoS attack conditions
+    duration_minutes: 15
+    
+  - name: dependency_failure
+    description: Simulate third-party service failure
+    duration_minutes: 20
+    
+  - name: infrastructure_degradation
+    description: Simulate gradual infrastructure degradation
+    duration_minutes: 60
+
+# Output configuration
+output:
+  capture_all_logs: true
+  save_failure_dumps: true
+  generate_timeline: true
+  include_system_metrics: true
+  create_post_mortem: true
+
+# Validation criteria
+validation:
+  max_data_loss_percent: 0.1
+  max_downtime_seconds: 60
+  min_recovery_success_rate: 95
+  must_handle_all_scenarios: true

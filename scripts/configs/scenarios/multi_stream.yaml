@@ -1,0 +1,135 @@
+# Multi-Stream Test Scenarios
+# Tests dynamic stream management and isolation
+
+name: Multi-Stream Tests
+description: Validate multi-stream operations, isolation, and resource management
+
+# Test scenarios
+scenarios:
+  - name: stream_addition_removal
+    description: Test dynamic stream addition and removal
+    type: example
+    example: robust_multistream
+    timeout: 120
+    args:
+      - "--streams"
+      - "5"
+      - "--duration"
+      - "30"
+    env:
+      MAX_STREAMS: "10"
+      ENABLE_ISOLATION: "true"
+  
+  - name: stream_isolation
+    description: Test stream isolation and fault containment
+    type: cargo_test
+    filter: "isolation::stream_isolator"
+    timeout: 180
+    configurations:
+      - ISOLATION_LEVEL: "process"
+        MAX_STREAMS: "3"
+      - ISOLATION_LEVEL: "thread"
+        MAX_STREAMS: "5"
+      - ISOLATION_LEVEL: "none"
+        MAX_STREAMS: "10"
+  
+  - name: resource_limits
+    description: Test resource limiting per stream
+    type: cargo_test
+    filter: "isolation::resource_limits"
+    timeout: 120
+    env:
+      MEMORY_LIMIT_MB: "512"
+      CPU_LIMIT_PERCENT: "25"
+      MAX_STREAMS: "4"
+  
+  - name: concurrent_operations
+    description: Test concurrent stream operations
+    type: cargo_test
+    filter: "stream::concurrent"
+    timeout: 150
+    matrix:
+      streams: [2, 5, 10, 20]
+      operations: ["add", "remove", "restart", "mixed"]
+
+# Load testing configurations
+load_tests:
+  - name: gradual_load_increase
+    description: Gradually increase stream count
+    type: custom
+    cmd:
+      - python
+      - scripts/load_test.py
+      - --mode
+      - gradual
+    env:
+      START_STREAMS: "1"
+      END_STREAMS: "50"
+      STEP_DURATION: "10"
+      STEP_INCREMENT: "5"
+  
+  - name: burst_load
+    description: Sudden burst of stream additions
+    type: custom
+    cmd:
+      - python
+      - scripts/load_test.py
+      - --mode
+      - burst
+    env:
+      BURST_SIZE: "20"
+      BURST_INTERVAL: "5"
+      TOTAL_BURSTS: "5"
+
+# Stream configurations to test
+stream_configs:
+  - name: file_sources
+    sources:
+      - type: file
+        path: test_videos/sample1.mp4
+      - type: file
+        path: test_videos/sample2.mp4
+    sinks:
+      - type: file
+        path: output/stream_%d.mp4
+  
+  - name: rtsp_sources
+    sources:
+      - type: rtsp
+        uri: rtsp://localhost:8554/stream1
+      - type: rtsp
+        uri: rtsp://localhost:8554/stream2
+    sinks:
+      - type: rtsp
+        port: 8555
+  
+  - name: mixed_sources
+    sources:
+      - type: file
+        path: test_videos/sample.mp4
+      - type: rtsp
+        uri: rtsp://localhost:8554/stream
+    sinks:
+      - type: file
+        path: output/mixed_%d.mp4
+      - type: rtsp
+        port: 8556
+
+# Performance expectations
+performance:
+  max_streams: 100
+  max_cpu_percent: 80
+  max_memory_mb: 4096
+  max_latency_ms: 100
+  
+# Validation criteria
+validation:
+  required_pass_rate: 95  # 95% of tests must pass
+  max_duration: 600  # 10 minutes maximum
+  
+# Output settings
+output:
+  capture_stdout: true
+  capture_stderr: true
+  save_metrics: true
+  metrics_format: prometheus

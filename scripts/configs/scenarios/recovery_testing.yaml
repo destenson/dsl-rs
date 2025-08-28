@@ -1,0 +1,173 @@
+# Recovery Testing Scenarios
+# Tests error recovery, retry strategies, and circuit breakers
+
+name: Recovery Tests
+description: Validate recovery mechanisms under various failure conditions
+
+# Recovery test scenarios
+scenarios:
+  - name: immediate_retry
+    description: Test immediate retry strategy
+    type: cargo_test
+    filter: "recovery::immediate_retry"
+    timeout: 120
+    env:
+      RECOVERY_STRATEGY: "immediate"
+      MAX_RETRY_ATTEMPTS: "5"
+      RETRY_DELAY_MS: "0"
+  
+  - name: exponential_backoff
+    description: Test exponential backoff retry
+    type: cargo_test
+    filter: "recovery::exponential_backoff"
+    timeout: 180
+    env:
+      RECOVERY_STRATEGY: "exponential"
+      INITIAL_DELAY_MS: "100"
+      MAX_DELAY_MS: "30000"
+      BACKOFF_FACTOR: "2.0"
+      MAX_RETRY_ATTEMPTS: "10"
+  
+  - name: circuit_breaker
+    description: Test circuit breaker pattern
+    type: cargo_test
+    filter: "recovery::circuit_breaker"
+    timeout: 240
+    configurations:
+      - name: sensitive
+        env:
+          FAILURE_THRESHOLD: "3"
+          SUCCESS_THRESHOLD: "2"
+          TIMEOUT_MS: "5000"
+          HALF_OPEN_ATTEMPTS: "1"
+      
+      - name: normal
+        env:
+          FAILURE_THRESHOLD: "5"
+          SUCCESS_THRESHOLD: "3"
+          TIMEOUT_MS: "10000"
+          HALF_OPEN_ATTEMPTS: "2"
+      
+      - name: tolerant
+        env:
+          FAILURE_THRESHOLD: "10"
+          SUCCESS_THRESHOLD: "5"
+          TIMEOUT_MS: "30000"
+          HALF_OPEN_ATTEMPTS: "3"
+
+# Failure injection scenarios
+failure_scenarios:
+  - name: network_failures
+    description: Simulate network disconnections
+    type: cargo_test
+    filter: "chaos::network"
+    timeout: 300
+    env:
+      FAILURE_TYPE: "network"
+      FAILURE_RATE: "0.1"  # 10% failure rate
+      FAILURE_DURATION_MS: "5000"
+      RECOVERY_EXPECTED: "true"
+  
+  - name: resource_exhaustion
+    description: Simulate resource exhaustion
+    type: cargo_test
+    filter: "chaos::resources"
+    timeout: 300
+    env:
+      FAILURE_TYPE: "resources"
+      MEMORY_PRESSURE: "high"
+      CPU_PRESSURE: "high"
+      RECOVERY_EXPECTED: "true"
+  
+  - name: corrupt_data
+    description: Simulate data corruption
+    type: cargo_test
+    filter: "chaos::corruption"
+    timeout: 300
+    env:
+      FAILURE_TYPE: "corruption"
+      CORRUPTION_RATE: "0.05"  # 5% of frames
+      RECOVERY_EXPECTED: "true"
+  
+  - name: cascading_failures
+    description: Simulate cascading failures
+    type: cargo_test
+    filter: "chaos::cascading"
+    timeout: 600
+    env:
+      FAILURE_TYPE: "cascading"
+      INITIAL_FAILURES: "2"
+      PROPAGATION_RATE: "0.3"
+      RECOVERY_EXPECTED: "true"
+
+# Recovery strategies matrix
+recovery_matrix:
+  strategies:
+    - immediate
+    - linear
+    - exponential
+    - circuit_breaker
+  
+  failure_types:
+    - network
+    - decode
+    - resource
+    - timeout
+  
+  configurations:
+    aggressive:
+      MAX_RETRY_ATTEMPTS: "3"
+      RETRY_DELAY_MS: "100"
+      GIVE_UP_AFTER_MS: "5000"
+    
+    balanced:
+      MAX_RETRY_ATTEMPTS: "5"
+      RETRY_DELAY_MS: "1000"
+      GIVE_UP_AFTER_MS: "30000"
+    
+    patient:
+      MAX_RETRY_ATTEMPTS: "10"
+      RETRY_DELAY_MS: "5000"
+      GIVE_UP_AFTER_MS: "300000"
+
+# Health check configurations
+health_checks:
+  - name: basic_health
+    interval_ms: 1000
+    timeout_ms: 500
+    failure_threshold: 3
+    
+  - name: detailed_health
+    interval_ms: 5000
+    timeout_ms: 2000
+    failure_threshold: 5
+    check_memory: true
+    check_cpu: true
+    check_pipeline_state: true
+
+# Monitoring and alerting
+monitoring:
+  metrics:
+    - recovery_attempts
+    - recovery_successes
+    - recovery_failures
+    - circuit_breaker_trips
+    - mean_time_to_recovery
+  
+  thresholds:
+    max_recovery_time_ms: 60000
+    max_consecutive_failures: 10
+    min_success_rate: 0.8
+
+# Validation criteria
+validation:
+  required_pass_rate: 90  # 90% of recovery tests must pass
+  max_recovery_time: 60000  # 1 minute maximum recovery time
+  
+# Output settings
+output:
+  capture_stdout: true
+  capture_stderr: true
+  save_recovery_logs: true
+  save_metrics: true
+  detailed_failure_analysis: true

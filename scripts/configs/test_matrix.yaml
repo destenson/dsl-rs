@@ -1,0 +1,115 @@
+# DSL-RS Test Matrix Configuration
+# Default configuration ranges and test scenario definitions
+
+# Default parameter ranges for matrix generation
+default_matrix:
+  stream_count:
+    start: 1
+    stop: 10
+    step: 3
+  
+  watchdog_timeout:
+    values: [0, 1, 5, 10, 30, 60, 300]
+  
+  retry_attempts:
+    start: 1
+    stop: 5
+  
+  backoff_factor:
+    values: [1.0, 1.5, 2.0]
+  
+  enable_metrics:
+    values: [true, false]
+  
+  enable_health_check:
+    values: [true, false]
+  
+  buffer_size:
+    enum: ['small', 'medium', 'large']
+  
+  recovery_strategy:
+    enum: ['immediate', 'exponential', 'circuit_breaker']
+
+# Platform-specific settings
+platforms:
+  windows:
+    timeout_multiplier: 1.5
+    max_parallel_tests: 4
+    
+  linux:
+    timeout_multiplier: 1.0
+    max_parallel_tests: 8
+    
+  darwin:  # macOS
+    timeout_multiplier: 1.2
+    max_parallel_tests: 6
+
+# Test timeout values (seconds)
+timeouts:
+  unit: 300
+  integration: 600
+  performance: 900
+  chaos: 1200
+  endurance: 7200  # 2 hours
+  
+# Test categories to run
+test_categories:
+  quick:
+    - unit
+    - integration
+  
+  standard:
+    - unit
+    - integration
+    - chaos
+  
+  full:
+    - unit
+    - integration
+    - chaos
+    - performance
+  
+  nightly:
+    - unit
+    - integration
+    - chaos
+    - performance
+    - endurance
+
+# Environment variable presets
+env_presets:
+  minimal:
+    RUST_BACKTRACE: "0"
+    RUST_LOG: "warn"
+    MAX_STREAMS: "1"
+    WATCHDOG_TIMEOUT: "0"
+    ENABLE_METRICS: "false"
+  
+  standard:
+    RUST_BACKTRACE: "1"
+    RUST_LOG: "info"
+    MAX_STREAMS: "10"
+    WATCHDOG_TIMEOUT: "60"
+    ENABLE_METRICS: "true"
+  
+  debug:
+    RUST_BACKTRACE: "full"
+    RUST_LOG: "debug"
+    MAX_STREAMS: "5"
+    WATCHDOG_TIMEOUT: "30"
+    ENABLE_METRICS: "true"
+  
+  production:
+    RUST_BACKTRACE: "1"
+    RUST_LOG: "warn"
+    MAX_STREAMS: "100"
+    WATCHDOG_TIMEOUT: "300"
+    ENABLE_METRICS: "true"
+    ENABLE_HEALTH_CHECK: "true"
+
+# Feature flags for cargo test
+features:
+  default: []
+  full: ["metrics", "health", "recovery", "isolation"]
+  performance: ["metrics", "performance-tracking"]
+  debug: ["debug-assertions", "verbose-logging"]

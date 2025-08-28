@@ -1,0 +1,31 @@
+# DSL-RS Test Runner Python Dependencies
+
+# Core dependencies
+PyYAML>=6.0.0       # YAML configuration file parsing
+click>=8.1.0        # CLI framework (optional, for future enhancements)
+
+# Optional dependencies for enhanced features
+# Uncomment to enable additional functionality
+
+# Reporting and visualization
+# matplotlib>=3.5.0   # For generating performance graphs
+# plotly>=5.0.0       # For interactive charts
+# jinja2>=3.1.0       # For advanced HTML templating
+
+# Testing utilities
+# pytest>=7.0.0       # If integrating with pytest
+# pytest-html>=3.1.0  # For pytest HTML reports
+# pytest-xdist>=3.0.0 # For distributed testing
+
+# Performance monitoring
+# psutil>=5.9.0       # For system resource monitoring
+# py-cpuinfo>=9.0.0   # For CPU information
+
+# Data analysis
+# pandas>=1.5.0       # For data analysis and reporting
+# numpy>=1.23.0       # For numerical computations
+
+# Development dependencies
+# black>=23.0.0       # Code formatter
+# pylint>=2.17.0      # Code linter
+# mypy>=1.0.0         # Type checker

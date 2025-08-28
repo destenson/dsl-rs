@@ -1,0 +1,209 @@
+# Performance Baseline Test Scenarios
+# Establishes performance baselines and benchmarks
+
+name: Performance Baseline
+description: Measure and validate performance characteristics
+
+# Benchmark scenarios
+benchmarks:
+  - name: single_stream_throughput
+    description: Measure single stream processing throughput
+    type: cargo_bench
+    filter: "throughput::single"
+    timeout: 300
+    configurations:
+      - resolution: "480p"
+        framerate: 30
+        codec: "h264"
+      - resolution: "720p"
+        framerate: 30
+        codec: "h264"
+      - resolution: "1080p"
+        framerate: 30
+        codec: "h264"
+      - resolution: "4k"
+        framerate: 30
+        codec: "h265"
+  
+  - name: multi_stream_throughput
+    description: Measure multi-stream processing throughput
+    type: cargo_bench
+    filter: "throughput::multi"
+    timeout: 600
+    matrix:
+      stream_count: [1, 2, 5, 10, 20, 50]
+      resolution: ["480p", "720p", "1080p"]
+      
+  - name: latency_measurement
+    description: Measure end-to-end latency
+    type: cargo_bench
+    filter: "latency"
+    timeout: 300
+    configurations:
+      - name: low_latency
+        buffer_size: "small"
+        queue_size: "1"
+      - name: balanced
+        buffer_size: "medium"
+        queue_size: "5"
+      - name: high_throughput
+        buffer_size: "large"
+        queue_size: "10"
+  
+  - name: memory_usage
+    description: Measure memory consumption
+    type: cargo_test
+    filter: "performance::memory"
+    timeout: 600
+    env:
+      MEASURE_MEMORY: "true"
+      MEMORY_SAMPLING_INTERVAL_MS: "100"
+  
+  - name: cpu_usage
+    description: Measure CPU utilization
+    type: cargo_test
+    filter: "performance::cpu"
+    timeout: 600
+    env:
+      MEASURE_CPU: "true"
+      CPU_SAMPLING_INTERVAL_MS: "100"
+
+# Load profiles for testing
+load_profiles:
+  light:
+    streams: 1
+    resolution: "480p"
+    framerate: 15
+    duration_seconds: 60
+    
+  moderate:
+    streams: 5
+    resolution: "720p"
+    framerate: 30
+    duration_seconds: 300
+    
+  heavy:
+    streams: 10
+    resolution: "1080p"
+    framerate: 30
+    duration_seconds: 600
+    
+  extreme:
+    streams: 20
+    resolution: "1080p"
+    framerate: 60
+    duration_seconds: 300
+
+# Performance targets
+targets:
+  throughput:
+    min_fps:
+      "480p": 120
+      "720p": 60
+      "1080p": 30
+      "4k": 15
+  
+  latency:
+    max_ms:
+      p50: 10
+      p95: 50
+      p99: 100
+      max: 200
+  
+  memory:
+    max_mb_per_stream:
+      "480p": 50
+      "720p": 100
+      "1080p": 200
+      "4k": 500
+  
+  cpu:
+    max_percent_per_stream:
+      "480p": 5
+      "720p": 10
+      "1080p": 20
+      "4k": 40
+
+# Regression detection
+regression:
+  enabled: true
+  baseline_file: "performance_baseline.json"
+  threshold_percent: 10  # Flag if performance degrades by >10%
+  metrics:
+    - throughput_fps
+    - latency_p99
+    - memory_mb
+    - cpu_percent
+
+# Profiling configuration
+profiling:
+  enabled: false  # Enable for detailed profiling
+  tools:
+    - perf
+    - flamegraph
+    - valgrind
+  output_dir: "profiles/"
+
+# Test matrix for different hardware
+hardware_matrix:
+  - name: low_end
+    cpu_cores: 2
+    memory_gb: 4
+    gpu: false
+    expected_performance: "light"
+  
+  - name: mid_range
+    cpu_cores: 4
+    memory_gb: 8
+    gpu: false
+    expected_performance: "moderate"
+  
+  - name: high_end
+    cpu_cores: 8
+    memory_gb: 16
+    gpu: true
+    expected_performance: "heavy"
+  
+  - name: server
+    cpu_cores: 32
+    memory_gb: 64
+    gpu: true
+    expected_performance: "extreme"
+
+# Stress test configurations
+stress_tests:
+  - name: sustained_load
+    description: Sustained high load test
+    duration_minutes: 30
+    streams: 10
+    resolution: "1080p"
+    framerate: 30
+    
+  - name: spike_load
+    description: Periodic load spikes
+    duration_minutes: 20
+    base_streams: 5
+    spike_streams: 20
+    spike_duration_seconds: 30
+    spike_interval_seconds: 120
+  
+  - name: memory_stress
+    description: Memory pressure test
+    duration_minutes: 15
+    streams: 5
+    leak_simulation: true
+    fragmentation_simulation: true
+
+# Output and reporting
+output:
+  format: ["json", "csv", "html"]
+  include_graphs: true
+  include_percentiles: true
+  save_raw_data: true
+  comparison_with_baseline: true
+
+# Validation criteria
+validation:
+  must_meet_targets: false  # Warning only for baseline establishment
+  max_regression_percent: 20
+  min_samples: 100

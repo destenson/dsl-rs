@@ -1,0 +1,81 @@
+# Basic Pipeline Test Scenarios
+# Tests fundamental pipeline operations and state transitions
+
+name: Basic Pipeline Tests
+description: Validate core pipeline functionality with various configurations
+
+# Test scenarios
+scenarios:
+  - name: single_stream_pipeline
+    description: Test single stream pipeline operations
+    type: cargo_test
+    filter: "pipeline::tests::single_stream"
+    timeout: 60
+    env:
+      MAX_STREAMS: "1"
+      WATCHDOG_TIMEOUT: "30"
+      ENABLE_METRICS: "false"
+  
+  - name: multi_stream_pipeline
+    description: Test multiple concurrent streams
+    type: cargo_test
+    filter: "pipeline::tests::multi_stream"
+    timeout: 120
+    configurations:
+      - MAX_STREAMS: "3"
+        WATCHDOG_TIMEOUT: "60"
+      - MAX_STREAMS: "5"
+        WATCHDOG_TIMEOUT: "60"
+      - MAX_STREAMS: "10"
+        WATCHDOG_TIMEOUT: "120"
+  
+  - name: pipeline_state_transitions
+    description: Test pipeline state machine transitions
+    type: cargo_test
+    filter: "pipeline::state_machine"
+    timeout: 60
+    env:
+      RUST_LOG: "debug"
+  
+  - name: pipeline_error_handling
+    description: Test pipeline error recovery
+    type: cargo_test
+    filter: "pipeline::error_handling"
+    timeout: 90
+    env:
+      ENABLE_RECOVERY: "true"
+      RETRY_ATTEMPTS: "3"
+
+# Configuration matrix for pipeline tests
+matrix:
+  watchdog_enabled:
+    - name: with_watchdog
+      env:
+        WATCHDOG_TIMEOUT: "60"
+        WATCHDOG_ACTION: "restart"
+    
+    - name: without_watchdog
+      env:
+        WATCHDOG_TIMEOUT: "0"
+  
+  metrics_enabled:
+    - name: with_metrics
+      env:
+        ENABLE_METRICS: "true"
+        METRICS_INTERVAL: "1000"
+    
+    - name: without_metrics
+      env:
+        ENABLE_METRICS: "false"
+
+# Validation criteria
+validation:
+  required_pass_rate: 100  # All basic pipeline tests must pass
+  max_duration: 300  # 5 minutes maximum for all tests
+  
+# Output settings
+output:
+  capture_stdout: true
+  capture_stderr: true
+  save_logs: true
+  log_level: info
