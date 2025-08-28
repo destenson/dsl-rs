@@ -75,7 +75,7 @@ impl RtspSinkRobust {
             )
             .build()
             .map_err(|_| DslError::Sink("Failed to create rtspclientsink".to_string()))?;
-        
+
         // Set protocols using string representation for enum
         // 0x7 = TCP + UDP + UDP_MCAST, so we use combined string
         rtsp_sink.set_property_from_str("protocols", "tcp+udp+udp-mcast");

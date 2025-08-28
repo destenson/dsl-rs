@@ -90,18 +90,18 @@ impl RtspSourceRobust {
             .property("do-retransmission", true)
             .build()
             .map_err(|_| DslError::Source("Failed to create rtspsrc".to_string()))?;
-        
+
         // Set enum properties using string representation
         // TCP = 0x4, so we use "tcp" string
         rtspsrc.set_property_from_str("protocols", "tcp");
         // buffer-mode: 0=none, 1=slave, 2=buffer, 3=auto, 4=synced
         let buffer_mode_str = match config.buffer_mode {
             0 => "none",
-            1 => "slave", 
+            1 => "slave",
             2 => "buffer",
             3 => "auto",
             4 => "synced",
-            _ => "auto"
+            _ => "auto",
         };
         rtspsrc.set_property_from_str("buffer-mode", buffer_mode_str);
 
