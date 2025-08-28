@@ -101,12 +101,12 @@ impl StreamManager {
                 "min-threshold-buffers",
                 config.queue_properties.min_threshold_buffers,
             )
-            .property(
+            .property_from_str(
                 "leaky",
                 if config.queue_properties.leaky {
-                    2i32
+                    "downstream"
                 } else {
-                    0i32
+                    "no"
                 },
             )
             .build()
