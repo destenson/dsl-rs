@@ -29,13 +29,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: ${{ matrix.rust }}
-        override: true
-        components: rustfmt, clippy
+    - name: Setup Rust toolchain
+      if: matrix.rust != 'stable'
+      run: |
+        rustup toolchain install ${{ matrix.rust }} --profile minimal --component rustfmt --component clippy
+        rustup default ${{ matrix.rust }}
     
     - name: Install GStreamer (Ubuntu)
       if: runner.os == 'Linux'
@@ -48,8 +46,20 @@ jobs:
     
     - name: Install GStreamer (Windows)
       if: runner.os == 'Windows'
+      shell: powershell
       run: |
-        choco install gstreamer
+        # Install GStreamer and pkg-config
+        choco install gstreamer --version=1.22.8
+        choco install pkgconfiglite
+        
+        # Set up environment variables
+        $gstPath = "C:\gstreamer\1.0\msvc_x86_64"
+        echo "GST_PLUGIN_PATH=$gstPath\lib\gstreamer-1.0" >> $env:GITHUB_ENV
+        echo "PKG_CONFIG_PATH=$gstPath\lib\pkgconfig" >> $env:GITHUB_ENV
+        echo "$gstPath\bin" >> $env:GITHUB_PATH
+        
+        # Verify installation
+        & "$gstPath\bin\gst-inspect-1.0.exe" --version
     
     - name: Install GStreamer (macOS)
       if: runner.os == 'macOS'
@@ -113,12 +123,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
+    # Use default stable Rust toolchain (already installed on runner)
     
     - name: Install GStreamer
       run: |
@@ -149,12 +154,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        override: true
+    # Use default stable Rust toolchain (already installed on runner)
     
     - name: Install GStreamer
       run: |
