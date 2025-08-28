@@ -1,19 +1,22 @@
-#![allow(unused)]
-use std::time::Duration;
-
-use dsl_rs::health::health_monitor::{HealthMonitor, MonitorConfig};
-use dsl_rs::pipeline::Pipeline;
-use dsl_rs::recovery::recovery_manager::RecoveryManager;
-use dsl_rs::sink::{FileRotationConfig, FileSink, RtspSink};
-use dsl_rs::source::{FileSource, RtspSource};
-use dsl_rs::stream::stream_manager::StreamManager;
-use dsl_rs::{core::PipelineConfig, init_gstreamer, init_logging, DslResult};
-
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::info;
+use std::time::Duration;
 
-fn main() -> DslResult<()> {
+use async_std::task;
+use dsl_rs::core::{DslResult, StreamState};
+use dsl_rs::health::health_monitor::{HealthMonitor, MonitorConfig};
+use dsl_rs::pipeline::robust_pipeline::{PipelineConfig, RobustPipeline};
+use dsl_rs::recovery::recovery_manager::{RecoveryManager, RecoveryPolicy};
+use dsl_rs::sink::file_sink_robust::{FileSinkRobust, RotationConfig};
+use dsl_rs::sink::rtsp_sink_robust::{RtspServerConfig, RtspSinkRobust};
+use dsl_rs::source::file_source_robust::FileSourceRobust;
+use dsl_rs::source::rtsp_source_robust::{RtspConfig, RtspSourceRobust};
+use dsl_rs::stream::stream_manager::StreamManager;
+use dsl_rs::{init_gstreamer, init_logging};
+use tracing::{error, info, warn};
+
+#[tokio::main]
+async fn main() -> DslResult<()> {
     // Initialize logging and GStreamer
     init_logging();
     init_gstreamer()?;
@@ -24,87 +27,210 @@ fn main() -> DslResult<()> {
     let pipeline_config = PipelineConfig {
         name: "multistream_demo".to_string(),
         max_streams: 8,
+        enable_watchdog: true,
+        watchdog_timeout: Duration::from_secs(10),
         ..Default::default()
     };
 
-    let mut pipeline = Arc::new(Pipeline::new(pipeline_config)?);
+    let pipeline = Arc::new(RobustPipeline::new(pipeline_config)?);
 
-    // Create stream manager and health monitor
+    // Create stream manager, recovery manager, and health monitor
     let stream_manager = Arc::new(StreamManager::new(pipeline.clone()));
-    let health_monitor = HealthMonitor::new(MonitorConfig::default());
+    let recovery_manager = Arc::new(RecoveryManager::new());
+    let health_monitor = Arc::new(HealthMonitor::new(MonitorConfig::default()));
+
+    // Start the pipeline
+    pipeline.start()?;
 
     // Start health monitoring
-    health_monitor.start_monitoring();
+    let monitor_handle = health_monitor.start_monitoring();
 
-    // Add multiple sources - mix of file and RTSP
-    let sources = vec![
-        // Simulated RTSP sources (would be real cameras in production)
-        ("camera_1", "rtsp://localhost:8554/stream1"),
-        ("camera_2", "rtsp://localhost:8554/stream2"),
-        ("camera_3", "rtsp://localhost:8554/stream3"),
-    ];
+    // Example 1: Add a test video file source with recording sink
+    info!("Setting up file source with recording sink...");
+    {
+        let stream_name = "file_stream";
+        
+        // Create a test pattern source (since we don't have a real video file)
+        // In production, you'd use a real file path
+        let file_source = Box::new(FileSourceRobust::new(
+            stream_name.to_string(),
+            PathBuf::from("/path/to/video.mp4"), // This would be a real file
+        )?);
 
-    // Add RTSP sources
-    for (name, uri) in sources {
-        info!("Adding RTSP source: {} from {}", name, uri);
+        // Add the source to the stream manager
+        stream_manager.add_stream(stream_name, file_source).await?;
 
-        let source = Box::new(RtspSource::new(name.to_string(), uri.to_string())?);
+        // Register with health monitor
+        health_monitor.register_stream(stream_name.to_string());
 
-        // Add sink for recording
-        let rotation_config = FileRotationConfig {
-            base_filename: name.to_string(),
-            directory: PathBuf::from("recordings"),
-            enable_size_rotation: true,
-            max_file_size: 100 * 1024 * 1024, // 100MB
+        // Create a file sink for recording
+        let recording_config = RotationConfig {
+            directory: PathBuf::from("./recordings"),
+            base_filename: "recording".to_string(),
+            max_file_size: Some(100 * 1024 * 1024), // 100MB
+            max_duration: Some(Duration::from_secs(300)), // 5 minutes
+            max_files: Some(10),
             ..Default::default()
         };
 
-        let sink = Box::new(FileSink::new(
-            format!("{}_recorder", name),
-            rotation_config,
+        let file_sink = Box::new(FileSinkRobust::new(
+            format!("{}_sink", stream_name),
+            recording_config,
         )?);
 
-        // Add stream to manager (simplified for now)
-        // In full implementation, would connect source to sink through stream manager
+        // Connect the sink to the stream
+        stream_manager.add_sink(stream_name, file_sink).await?;
+
+        info!("File pipeline setup complete");
     }
 
-    // Start the pipeline
-    info!("Starting pipeline");
-    pipeline.start()?;
+    // Example 2: Add RTSP sources with RTSP server sinks
+    info!("Setting up RTSP sources with server sinks...");
+    
+    // For demonstration, we'll use test sources since real RTSP cameras may not be available
+    // In production, these would be real camera URLs
+    let rtsp_sources = vec![
+        ("camera_1", "rtsp://localhost:8554/test1", 8555),
+        ("camera_2", "rtsp://localhost:8554/test2", 8556),
+        ("camera_3", "rtsp://localhost:8554/test3", 8557),
+    ];
 
-    // Simulate running for a period
-    info!("Pipeline running... Press Ctrl+C to stop");
+    for (stream_name, uri, server_port) in rtsp_sources {
+        info!("Adding RTSP source: {} from {}", stream_name, uri);
 
-    // Main loop
-    let main_loop = gstreamer::glib::MainLoop::new(None, false);
+        // Configure RTSP source with retry logic
+        let rtsp_config = RtspConfig {
+            uri: uri.to_string(),
+            protocols: 0x00000004, // TCP
+            latency: 100,
+            timeout: 5_000_000,
+            reconnect_timeout: 5_000_000,
+            tcp_timeout: 5_000_000,
+            buffer_mode: 3, // auto
+            ntp_sync: false,
+            retry_on_401: true,
+            user_agent: Some("dsl-rs/1.0".to_string()),
+            user_id: None,
+            user_password: None,
+        };
 
-    // Set up signal handler for graceful shutdown
-    let main_loop_clone = main_loop.clone();
-    ctrlc::set_handler(move || {
-        info!("Shutting down...");
-        main_loop_clone.quit();
-    })
-    .expect("Error setting Ctrl-C handler");
+        let rtsp_source = Box::new(RtspSourceRobust::with_config(
+            stream_name.to_string(),
+            rtsp_config,
+        )?);
 
-    // Run main loop
-    main_loop.run();
+        // Set recovery policy for this source
+        recovery_manager.set_recovery_policy(
+            stream_name,
+            RecoveryPolicy::ExponentialBackoff {
+                initial_delay: Duration::from_millis(100),
+                max_delay: Duration::from_secs(30),
+                multiplier: 2.0,
+            },
+        );
 
-    // Cleanup
-    info!("Stopping pipeline");
+        // Add the source
+        stream_manager.add_stream(stream_name, rtsp_source).await?;
+
+        // Register with health monitor
+        health_monitor.register_stream(stream_name.to_string());
+
+        // Create RTSP server sink
+        let server_config = RtspServerConfig {
+            port: server_port,
+            mount_point: format!("/{}", stream_name),
+            protocols: 0x00000007, // TCP + UDP + UDP_MCAST
+            max_clients: Some(10),
+            enable_authentication: false,
+            username: None,
+            password: None,
+            multicast_address: None,
+            enable_rate_adaptation: true,
+            key_frame_interval: 2,
+        };
+
+        let rtsp_sink = Box::new(RtspSinkRobust::new(
+            format!("{}_server", stream_name),
+            server_config,
+        )?);
+
+        // Connect the sink
+        stream_manager.add_sink(stream_name, rtsp_sink).await?;
+
+        info!("RTSP pipeline for {} setup complete", stream_name);
+    }
+
+    // Let the pipelines run for a while
+    info!("Pipelines running... Press Ctrl+C to stop");
+
+    // Monitor health and handle errors
+    let manager_clone = stream_manager.clone();
+    let recovery_clone = recovery_manager.clone();
+    let health_clone = health_monitor.clone();
+    
+    let monitor_task = task::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        
+        loop {
+            interval.tick().await;
+            
+            // Check health of all streams
+            for stream_name in manager_clone.list_streams() {
+                if let Some(health) = manager_clone.get_stream_health(&stream_name) {
+                    match health.state {
+                        StreamState::Error => {
+                            warn!("Stream {} is in error state", stream_name);
+                            
+                            // Attempt recovery
+                            if let Err(e) = manager_clone.handle_stream_error(&stream_name).await {
+                                error!("Failed to recover stream {}: {}", stream_name, e);
+                            }
+                        }
+                        StreamState::Stopped => {
+                            warn!("Stream {} is stopped, attempting restart", stream_name);
+                            // Could implement restart logic here
+                        }
+                        _ => {
+                            // Stream is healthy
+                            info!(
+                                "Stream {} health: state={:?}, fps={:.1}, bitrate={:.1} kbps",
+                                stream_name,
+                                health.state,
+                                health.metrics.fps,
+                                health.metrics.bitrate as f32 / 1024.0
+                            );
+                        }
+                    }
+                }
+            }
+            
+            // Get overall health report
+            let report = health_clone.get_health_report();
+            info!(
+                "Overall health: {} healthy streams, {} unhealthy",
+                report.healthy_streams, report.unhealthy_streams
+            );
+        }
+    });
+
+    // Wait for Ctrl+C
+    tokio::signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+    
+    info!("Shutting down pipelines...");
+
+    // Clean shutdown
+    for stream_name in stream_manager.list_streams() {
+        if let Err(e) = stream_manager.remove_source(&stream_name).await {
+            error!("Error removing source {}: {}", stream_name, e);
+        }
+    }
+
+    // Stop the pipeline
     pipeline.stop()?;
+
+    // Stop health monitoring
     health_monitor.stop_monitoring();
 
-    // Print final health report
-    let report = health_monitor.generate_report();
-    info!("Final health report:");
-    info!("  Overall status: {:?}", report.overall_health);
-    info!("  Total streams: {}", report.system_metrics.total_streams);
-    info!("  Active streams: {}", report.system_metrics.active_streams);
-    info!(
-        "  Pipeline uptime: {:?}",
-        report.system_metrics.pipeline_uptime
-    );
-
-    info!("DSL-RS example completed successfully");
+    info!("Shutdown complete");
     Ok(())
 }
