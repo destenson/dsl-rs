@@ -29,7 +29,7 @@
 - [ ] Add platform-specific disk space checking (`src/sink/file_sink_robust.rs:208`)
 
 ### Core Pipeline Features
-- [ ] Connect sources to sinks through stream manager in example
+- [x] Connect sources to sinks through stream manager in example (COMPLETED)
 - [ ] Implement proper stream unlinking and removal (`src/stream/stream_manager.rs:241`)
 - [ ] Link decoded pads to downstream elements in sources:
   - File source (`src/source/file_source_robust.rs:93`)
@@ -82,8 +82,10 @@
 - [x] Recovery manager with circuit breakers
 - [x] Health monitoring system
 - [x] Stream isolation framework
-- [x] Basic multistream example
+- [x] Basic multistream example with source-to-sink linking
+- [x] Integration tests for source-sink flow
 - [x] Project documentation (README.md)
+- [x] Fixed RTSP property types using GStreamer enum strings
 
 ### Testing Infrastructure
 - [x] Test runner script with configuration matrix support
