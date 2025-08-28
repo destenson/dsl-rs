@@ -1,5 +1,26 @@
 # TODO
 
+## Critical Priority - Testing & Validation
+
+### Systematic Testing Framework (PRPs/10_systematic_testing_framework.md)
+- [ ] Create common test utilities (`tests/common/mod.rs`)
+- [ ] Enhance unit test coverage to >80% for all modules
+- [ ] Add integration tests for multi-stream scenarios (`tests/integration/`)
+- [ ] Implement chaos testing for network failures (`tests/chaos/network_failures.rs`)
+- [ ] Add resource exhaustion tests (`tests/chaos/resource_exhaustion.rs`)
+- [ ] Create performance benchmarks (`tests/performance/benchmarks.rs`)
+- [ ] Add configuration matrix tests (`tests/configurations/matrix_tests.rs`)
+- [ ] Implement endurance test for 24-hour stability
+
+### Test Runner Script (PRPs/11_test_runner_script.md)
+- [ ] Create Python test runner script (`scripts/test_runner.py`)
+- [ ] Implement configuration matrix generator (`scripts/lib/config_generator.py`)
+- [ ] Add test executor with parallel support (`scripts/lib/test_executor.py`)
+- [ ] Create HTML/JSON report generator (`scripts/lib/report_generator.py`)
+- [ ] Add test scenarios YAML configs (`scripts/configs/scenarios/`)
+- [ ] Create platform-specific wrappers (`.sh` and `.ps1`)
+- [ ] Add CI/CD integration (`.github/workflows/test.yml`)
+
 ## High Priority
 
 ### Production Readiness
@@ -33,12 +54,6 @@
 - [ ] Implement proper cloneable trait for RecoveryStrategy (`src/recovery/recovery_manager.rs:429-430`)
 
 ## Low Priority
-
-### Tests
-- [ ] Add chaos testing suite (from PRP requirements)
-- [ ] Add integration tests for multi-stream scenarios
-- [ ] Add load tests for maximum stream count
-- [ ] Add endurance test for 7-day continuous run
 
 ### Code Quality
 - [ ] Fix all compilation warnings (unused variables, imports, etc.)
