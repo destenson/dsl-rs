@@ -1,65 +1,65 @@
 # TODO
 
-## Critical Priority - Testing & Validation
+## Critical Priority - Build & CI
 
-### Systematic Testing Framework (PRPs/10_systematic_testing_framework.md)
-- [x] Create common test utilities (`tests/common/mod.rs`)
-- [x] Enhance unit test coverage to >80% for all modules
-- [x] Add integration tests for multi-stream scenarios (`tests/integration/`)
-- [x] Implement chaos testing for network failures (`tests/chaos/network_failures.rs`)
-- [x] Add resource exhaustion tests (`tests/chaos/resource_exhaustion.rs`)
-- [x] Create performance benchmarks (`tests/performance/benchmarks.rs`)
-- [x] Add configuration matrix tests (`tests/configurations/matrix_tests.rs`)
-- [ ] Implement endurance test for 24-hour stability
+### Windows Build Support
+- [ ] Fix Windows CI builds - GStreamer installation issues
+- [ ] Document Windows local development setup with GStreamer
+- [ ] Consider vcpkg or other package managers for Windows dependencies
 
-### Test Runner Script (PRPs/11_test_runner_script.md)
-- [x] Create Python test runner script (`scripts/test_runner.py`)
-- [x] Implement configuration matrix generator (`scripts/lib/config_generator.py`)
-- [x] Add test executor with parallel support (`scripts/lib/test_executor.py`)
-- [x] Create HTML/JSON report generator (`scripts/lib/report_generator.py`)
-- [x] Add test scenarios YAML configs (`scripts/configs/scenarios/`)
-- [x] Create platform-specific wrappers (`.sh` and `.ps1`)
-- [x] Add CI/CD integration (`.github/workflows/test.yml`)
+### Code Quality
+- [ ] Fix all compilation warnings (42+ warnings in lib)
+  - [ ] Remove unused imports (`std::sync::Arc`, various tracing imports)
+  - [ ] Fix unused variables (prefix with `_` where appropriate)
+  - [ ] Fix unused `mut` warnings
+  - [ ] Fix unreachable code after `todo!()` macro
+  - [ ] Fix private interface warnings in `RecoveryManager`
 
-## High Priority
+## High Priority - Testing & Validation
+
+### Endurance Testing
+- [ ] Implement 24-hour stability test (`scripts/endurance_test.sh`)
+- [ ] Add memory leak detection during long runs
+- [ ] Monitor resource usage over time
 
 ### Production Readiness
-- [ ] Implement proper authentication for RTSP server (`src/sink/rtsp_sink_robust.rs:161`)
-- [ ] Add actual memory usage calculation in health monitor (`src/health/health_monitor.rs:255-256`)
-- [ ] Implement platform-specific memory checking (`src/health/health_monitor.rs:305-306`)
-- [ ] Add platform-specific disk space checking (`src/sink/file_sink_robust.rs:204-205`)
+- [ ] Implement proper authentication for RTSP server (`src/sink/rtsp_sink_robust.rs:166`)
+- [ ] Add actual memory usage calculation in health monitor (`src/health/health_monitor.rs:265-266`)
+- [ ] Implement platform-specific memory checking (`src/health/health_monitor.rs:315`)
+- [ ] Add platform-specific disk space checking (`src/sink/file_sink_robust.rs:208`)
 
 ### Core Pipeline Features
-- [ ] Connect sources to sinks through stream manager in example (`examples/robust_multistream.rs:70-71`)
-- [ ] Implement proper stream unlinking and removal (`src/stream/stream_manager.rs:228`)
+- [ ] Connect sources to sinks through stream manager in example
+- [ ] Implement proper stream unlinking and removal (`src/stream/stream_manager.rs:241`)
 - [ ] Link decoded pads to downstream elements in sources:
-  - File source (`src/source/file_source_robust.rs:95`)
-  - RTSP source (`src/source/rtsp_source_robust.rs:131`)
+  - File source (`src/source/file_source_robust.rs:93`)
+  - RTSP source (`src/source/rtsp_source_robust.rs:128`)
 
 ## Medium Priority
 
 ### Resource Management
-- [ ] Implement actual memory limiting in stream isolator (`src/isolation/stream_isolator.rs:206-207`)
-- [ ] Add CPU throttling using platform APIs (`src/isolation/stream_isolator.rs:230`)
-- [ ] Use actual system APIs for resource monitoring (`src/isolation/stream_isolator.rs:273`)
-- [ ] Trigger recovery for isolated stream panics (`src/isolation/stream_isolator.rs:101`)
+- [ ] Implement actual memory limiting in stream isolator (`src/isolation/stream_isolator.rs:212-213`)
+- [ ] Add CPU throttling using platform APIs (`src/isolation/stream_isolator.rs:239`)
+- [ ] Update memory & CPU usage metrics (`src/isolation/stream_isolator.rs:287` - todo!() macro)
+- [ ] Use actual system APIs for resource monitoring
+- [ ] Trigger recovery for isolated stream panics
 
 ### RTSP Improvements
-- [ ] Replace test source with actual upstream pipeline (`src/sink/rtsp_sink_robust.rs:144`)
-- [ ] Implement encoder bitrate adjustment for bandwidth adaptation (`src/sink/rtsp_sink_robust.rs:217`)
-- [ ] Add force-key-unit event sending (`src/sink/rtsp_sink_robust.rs:235`)
-- [ ] Use real cameras instead of simulated sources in example (`examples/robust_multistream.rs:41`)
+- [ ] Replace test source with actual upstream pipeline (`src/sink/rtsp_sink_robust.rs:147`)
+- [ ] Implement encoder bitrate adjustment for bandwidth adaptation
+- [ ] Add force-key-unit event sending  
+- [ ] Use real cameras instead of simulated sources in example
 
 ### Recovery System
-- [ ] Implement proper cloneable trait for RecoveryStrategy (`src/recovery/recovery_manager.rs:429-430`)
+- [ ] Implement proper cloneable trait for RecoveryStrategy (`src/recovery/recovery_manager.rs:435-440`)
 
 ## Low Priority
 
-### Code Quality
-- [ ] Fix all compilation warnings (unused variables, imports, etc.)
-- [ ] Remove underscore prefixes from actually used parameters
-- [ ] Add proper error handling for all edge cases
+### Documentation
 - [ ] Complete documentation for all public APIs
+- [ ] Add usage examples for each major component
+- [ ] Document Windows development setup with GStreamer
+- [ ] Add troubleshooting guide
 
 ### Future Enhancements
 - [ ] Add Kubernetes operator for orchestration
@@ -71,8 +71,9 @@
 - [ ] Add ODE (Object Detection Event) services
 - [ ] Implement display types and OSD
 
-## Completed (but needs testing)
+## Completed
 
+### Core Implementation
 - [x] Core foundation with error types and traits
 - [x] Robust pipeline with watchdog and state machine
 - [x] Stream manager for dynamic stream handling
@@ -83,3 +84,10 @@
 - [x] Stream isolation framework
 - [x] Basic multistream example
 - [x] Project documentation (README.md)
+
+### Testing Infrastructure
+- [x] Test runner script with configuration matrix support
+- [x] Performance benchmarks (compiles, ready to run)
+- [x] HTML/JSON test report generation
+- [x] CI/CD pipeline (Linux and macOS)
+- [x] Test scenario configurations
