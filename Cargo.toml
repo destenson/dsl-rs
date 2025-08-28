@@ -1,0 +1,65 @@
+[package]
+name = "dsl-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# GStreamer bindings
+gstreamer = "0.24.1"
+gstreamer-app = "0.24.0"
+gstreamer-rtsp = "0.24.0"
+gstreamer-rtsp-server = "0.24.1"
+gstreamer-video = "0.24.1"
+
+# # GLib for async runtime (we'll use gstreamer::glib)
+# glib = "0.21.1"
+
+# Logging and tracing
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+# Metrics and telemetry
+metrics = "0.24.2"
+metrics-util = "0.20.0"
+metrics-exporter-prometheus = "0.17.2"
+
+# Concurrent collections
+dashmap = "6.1.0"
+
+# Error handling
+thiserror = "2.0.16"
+anyhow = "1.0.99"
+
+# Async runtime components
+futures = "0.3.31"
+async-trait = "0.1.89"
+
+# Configuration
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.143"
+serde_yaml = "0.9.34-deprecated"
+
+# Time handling
+chrono = "0.4.41"
+
+# Path and filesystem utilities
+walkdir = "2.5.0"
+
+# Network utilities
+url = "2.5.7"
+
+# UUID generation
+uuid = { version = "1.18.0", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1.47.1", features = ["full"] }
+proptest = "1.7.0"
+quickcheck = "1.0.3"
+criterion = "0.7.0"
+tempfile = "3.21.0"
+# Signal handling for examples
+ctrlc = "3.4.0"
+
+[[example]]
+name = "robust_multistream"
+path = "examples/robust_multistream.rs"
