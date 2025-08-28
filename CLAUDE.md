@@ -61,12 +61,21 @@ The codebase is organized into domain-specific modules:
 
 ## Development Guidelines
 
+### Async Runtime Constraints
+
+**IMPORTANT: Tokio is PROHIBITED in this codebase**
+- This project uses `futures` and `async-trait` for async operations
+- Use `futures::executor::block_on()` when running async code from sync contexts
+- Never add `tokio` as a dependency or use `#[tokio::main]` or `#[tokio::test]`
+- For async tests, use standard `#[test]` with `futures::executor::block_on()`
+
 ### GStreamer Integration
 
 - Always check GStreamer operations for errors
 - Use `gst::prelude::*` for trait imports
 - Elements must be added to bins before linking
 - State changes should be verified with timeout
+- Use `set_property_from_str()` for GStreamer enum properties (e.g., protocols, buffer-mode)
 
 ### Error Handling
 
