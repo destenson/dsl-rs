@@ -59,7 +59,14 @@ criterion = "0.7.0"
 tempfile = "3.21.0"
 # Signal handling for examples
 ctrlc = "3.4.0"
+# For test randomization
+rand = "0.8"
 
 [[example]]
 name = "robust_multistream"
 path = "examples/robust_multistream.rs"
+
+[[bench]]
+name = "benchmarks"
+harness = false
+path = "tests/performance/benchmarks.rs"

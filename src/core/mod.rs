@@ -169,7 +169,7 @@ impl Default for RetryConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RecoveryAction {
     Retry,
     Restart,

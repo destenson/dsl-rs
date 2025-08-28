@@ -5,7 +5,7 @@ use dsl_rs::core::PipelineConfig;
 use dsl_rs::pipeline::Pipeline;
 use dsl_rs::stream::stream_manager::StreamManager;
 use dsl_rs::source::{FileSource, RtspSource};
-use dsl_rs::sink::FileSink;
+use dsl_rs::sink::{FileSink, FileRotationConfig, RtspSink};
 use dsl_rs::health::health_monitor::{HealthMonitor, MonitorConfig};
 use dsl_rs::recovery::recovery_manager::RecoveryManager;
 
@@ -54,7 +54,7 @@ fn main() -> DslResult<()> {
         )?);
         
         // Add sink for recording
-        let rotation_config = RotationConfig{
+        let rotation_config = FileRotationConfig{
             base_filename: name.to_string(),
             directory: PathBuf::from("recordings"),
             enable_size_rotation: true,

@@ -268,20 +268,21 @@ impl StreamIsolator {
                 
                 for entry in streams.iter() {
                     let stream = entry.value().lock().unwrap();
-                    
-                    // Simulate resource monitoring
-                    // In production, would use actual system APIs
-                    let mock_memory = 100 * 1_048_576; // 100MB
-                    let mock_cpu = 10.0; // 10%
-                    
-                    *stream.memory_usage.lock().unwrap() = mock_memory;
-                    *stream.cpu_usage.lock().unwrap() = mock_cpu;
-                    
+
+                    let mut memory = stream.memory_usage.lock().unwrap();
+                    let mut cpu = stream.cpu_usage.lock().unwrap();
+
                     // Update last activity
                     *stream.last_activity.lock().unwrap() = Instant::now();
-                    
+
+                    todo!("Update memory & cpu usage metrics");
+
+                    // Implement resource monitoring logic
+                    let memory = *memory;
+                    let cpu = *cpu;
+
                     debug!("Stream {} resources - Memory: {}MB, CPU: {:.1}%",
-                        entry.key(), mock_memory / 1_048_576, mock_cpu);
+                        entry.key(), memory / 1_048_576, cpu);
                 }
             }
         });
