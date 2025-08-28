@@ -30,7 +30,8 @@ pub struct RobustPipeline {
     state_machine: Arc<Mutex<StateMachine>>,
     metrics_collector: Arc<MetricsCollector>,
     event_bus: gst::Bus,
-    main_loop: Option<gstreamer::glib::MainLoop>,
+    // main_loop removed: we don't keep a MainLoop in the struct so start()/stop() can be &self
+    stop_signal: Arc<Mutex<Option<std::sync::mpsc::Sender<()>>>>,
 }
 
 struct StreamInfo {
@@ -268,6 +269,7 @@ impl RobustPipeline {
             Arc::clone(&streams),
         ));
 
+        // stop_signal will be created when the event handler is started; keep None until then
         Ok(Self {
             pipeline,
             config,
@@ -276,7 +278,7 @@ impl RobustPipeline {
             state_machine: Arc::new(Mutex::new(StateMachine::new())),
             metrics_collector,
             event_bus: bus,
-            main_loop: None,
+            stop_signal: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -321,7 +323,7 @@ impl RobustPipeline {
         }
     }
 
-    pub fn start(&mut self) -> DslResult<()> {
+    pub fn start(&self) -> DslResult<()> {
         self.pipeline.set_state(gst::State::Playing)
             .map_err(|_| DslError::Pipeline("Failed to start pipeline".to_string()))?;
 
@@ -339,7 +341,7 @@ impl RobustPipeline {
         Ok(())
     }
 
-    pub fn stop(&mut self) -> DslResult<()> {
+    pub fn stop(&self) -> DslResult<()> {
         if let Some(ref watchdog) = self.watchdog {
             watchdog.stop();
         }
@@ -349,10 +351,10 @@ impl RobustPipeline {
         self.pipeline.set_state(gst::State::Null)
             .map_err(|_| DslError::Pipeline("Failed to stop pipeline".to_string()))?;
 
-        if let Some(main_loop) = self.main_loop.take() {
-            main_loop.quit();
+        // Signal the event loop thread to quit if it is running.
+        if let Some(tx) = self.stop_signal.lock().unwrap().take() {
+            let _ = tx.send(());
         }
-
         info!("Pipeline stopped");
         Ok(())
     }
@@ -373,16 +375,28 @@ impl RobustPipeline {
         Ok(())
     }
 
-    fn start_event_handler(&mut self) {
+    fn start_event_handler(&self) {
+        // If an event handler is already running, do nothing.
+        {
+            let guard = self.stop_signal.lock().unwrap();
+            if guard.is_some() {
+                return;
+            }
+        }
+
         let bus = self.event_bus.clone();
-        let streams = Arc::clone(&self.streams);
         let state_machine = Arc::clone(&self.state_machine);
         let watchdog = self.watchdog.as_ref().map(|w| w.clone());
+        let stop_signal = Arc::clone(&self.stop_signal);
 
         let main_loop = gstreamer::glib::MainLoop::new(None, false);
-        self.main_loop = Some(main_loop.clone());
+        let main_loop_quit = main_loop.clone();
 
-        bus.add_watch(move |_, msg| {
+        // Create stop signal channel
+        let (tx, rx) = std::sync::mpsc::channel();
+        *stop_signal.lock().unwrap() = Some(tx);
+
+        let watch = bus.add_watch(move |_, msg| {
             match msg.view() {
                 gst::MessageView::Error(err) => {
                     error!("Pipeline error: {:?}", err);
@@ -415,7 +429,17 @@ impl RobustPipeline {
         .expect("Failed to add bus watch");
 
         std::thread::spawn(move || {
+            // Handle stop signal in a separate thread
+            std::thread::spawn(move || {
+                if rx.recv().is_ok() {
+                    main_loop_quit.quit();
+                }
+            });
+            
             main_loop.run();
+            
+            // Keep the watch alive
+            drop(watch);
         });
     }
 
@@ -468,6 +492,8 @@ impl Clone for WatchdogTimer {
 
 #[cfg(test)]
 mod tests {
+    use crate::pipeline;
+
     use super::*;
 
     #[test]
@@ -493,5 +519,9 @@ mod tests {
         let config = PipelineConfig::default();
         let pipeline = RobustPipeline::new(config);
         assert!(pipeline.is_ok());
+        let pipeline = pipeline.unwrap();
+        pipeline.start().expect("Failed to start pipeline");
+        std::thread::sleep(Duration::from_secs(1));
+        pipeline.stop().expect("Failed to stop pipeline");
     }
 }

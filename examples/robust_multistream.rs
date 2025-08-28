@@ -1,7 +1,7 @@
+#![allow(unused)]
 use std::time::Duration;
 
 use dsl_rs::{init_gstreamer, init_logging, DslResult, core::PipelineConfig};
-use dsl_rs::core::PipelineConfig;
 use dsl_rs::pipeline::Pipeline;
 use dsl_rs::stream::stream_manager::StreamManager;
 use dsl_rs::source::{FileSource, RtspSource};
@@ -27,10 +27,10 @@ fn main() -> DslResult<()> {
         ..Default::default()
     };
     
-    let mut pipeline = Pipeline::new(pipeline_config)?;
+    let mut pipeline = Arc::new(Pipeline::new(pipeline_config)?);
     
     // Create stream manager and health monitor
-    let stream_manager = Arc::new(StreamManager::new(Arc::new(pipeline)));
+    let stream_manager = Arc::new(StreamManager::new(pipeline.clone()));
     let health_monitor = HealthMonitor::new(MonitorConfig::default());
     
     // Start health monitoring
