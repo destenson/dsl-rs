@@ -8,8 +8,7 @@ use gstreamer::prelude::*;
 use tracing::{debug, error, info, warn};
 
 use crate::core::{
-    DslError, DslResult, Source, StreamState, StreamMetrics, 
-    RetryConfig, RecoveryAction
+    DslError, DslResult, RecoveryAction, RetryConfig, Source, StreamMetrics, StreamState,
 };
 
 pub struct FileSourceRobust {
@@ -31,7 +30,7 @@ impl FileSourceRobust {
         // Validate file exists
         if !path.exists() {
             return Err(DslError::FileIo(format!(
-                "File not found: {}", 
+                "File not found: {}",
                 path.display()
             )));
         }
@@ -66,7 +65,7 @@ impl FileSourceRobust {
         // Check file still exists
         if !self.path.exists() {
             return Err(DslError::FileIo(format!(
-                "File no longer exists: {}", 
+                "File no longer exists: {}",
                 self.path.display()
             )));
         }
@@ -75,9 +74,10 @@ impl FileSourceRobust {
         match std::fs::File::open(&self.path) {
             Ok(_) => Ok(()),
             Err(e) => Err(DslError::FileIo(format!(
-                "Cannot read file {}: {}", 
-                self.path.display(), e
-            )))
+                "Cannot read file {}: {}",
+                self.path.display(),
+                e
+            ))),
         }
     }
 
@@ -102,19 +102,21 @@ impl FileSourceRobust {
     async fn handle_eof(&mut self) -> DslResult<()> {
         if self.loop_on_eof {
             info!("EOF reached for {}, restarting from beginning", self.name);
-            
+
             // Increment restart count
             *self.restart_count.lock().unwrap() += 1;
-            
+
             // Seek to beginning
-            self.element.seek_simple(
-                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-                gst::ClockTime::ZERO
-            ).map_err(|_| DslError::Source("Failed to seek to beginning".to_string()))?;
-            
+            self.element
+                .seek_simple(
+                    gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                    gst::ClockTime::ZERO,
+                )
+                .map_err(|_| DslError::Source("Failed to seek to beginning".to_string()))?;
+
             // Update position
             *self.position.lock().unwrap() = Some(gst::ClockTime::ZERO);
-            
+
             Ok(())
         } else {
             info!("EOF reached for {}, stopping", self.name);
@@ -126,7 +128,7 @@ impl FileSourceRobust {
     fn update_position(&self) -> DslResult<()> {
         if let Some(position) = self.element.query_position::<gst::ClockTime>() {
             *self.position.lock().unwrap() = Some(position);
-            
+
             // Update metrics
             let mut metrics = self.metrics.lock().unwrap();
             if let Some(last_time) = metrics.last_frame_time {
@@ -143,30 +145,40 @@ impl FileSourceRobust {
 
     async fn recover_from_error(&mut self, error: &DslError) -> DslResult<()> {
         warn!("Attempting to recover from error: {:?}", error);
-        
+
         // Stop current playback
-        self.element.set_state(gst::State::Null)
+        self.element
+            .set_state(gst::State::Null)
             .map_err(|_| DslError::Source("Failed to stop element".to_string()))?;
-        
+
         // Validate file still exists
         self.validate_file().await?;
-        
+
         // Restart from last position or beginning
-        let seek_position = self.position.lock().unwrap().unwrap_or(gst::ClockTime::ZERO);
-        
+        let seek_position = self
+            .position
+            .lock()
+            .unwrap()
+            .unwrap_or(gst::ClockTime::ZERO);
+
         // Set back to playing
-        self.element.set_state(gst::State::Playing)
+        self.element
+            .set_state(gst::State::Playing)
             .map_err(|_| DslError::Source("Failed to restart element".to_string()))?;
-        
+
         // Seek to position
-        self.element.seek_simple(
-            gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
-            seek_position
-        ).map_err(|_| DslError::Source("Failed to seek to position".to_string()))?;
-        
-        info!("Successfully recovered file source {} at position {:?}", 
-            self.name, seek_position);
-        
+        self.element
+            .seek_simple(
+                gst::SeekFlags::FLUSH | gst::SeekFlags::KEY_UNIT,
+                seek_position,
+            )
+            .map_err(|_| DslError::Source("Failed to seek to position".to_string()))?;
+
+        info!(
+            "Successfully recovered file source {} at position {:?}",
+            self.name, seek_position
+        );
+
         Ok(())
     }
 
@@ -191,38 +203,40 @@ impl Source for FileSourceRobust {
 
     async fn connect(&mut self) -> DslResult<()> {
         *self.state.lock().unwrap() = StreamState::Starting;
-        
+
         // Validate file before playing
         self.validate_file().await?;
-        
+
         // Setup decoding if needed
         if self.decodebin.is_none() {
             self.setup_decoding().await?;
         }
-        
+
         // Query duration
         if let Some(duration) = self.element.query_duration::<gst::ClockTime>() {
             self.duration = Some(duration);
             info!("File {} duration: {:?}", self.name, duration);
         }
-        
+
         // Set to playing state
-        self.element.set_state(gst::State::Playing)
+        self.element
+            .set_state(gst::State::Playing)
             .map_err(|_| DslError::Source("Failed to start file source".to_string()))?;
-        
+
         *self.state.lock().unwrap() = StreamState::Running;
         info!("File source {} connected and playing", self.name);
-        
+
         Ok(())
     }
 
     async fn disconnect(&mut self) -> DslResult<()> {
         *self.state.lock().unwrap() = StreamState::Stopped;
-        
+
         // Stop the element
-        self.element.set_state(gst::State::Null)
+        self.element
+            .set_state(gst::State::Null)
             .map_err(|_| DslError::Source("Failed to stop file source".to_string()))?;
-        
+
         info!("File source {} disconnected", self.name);
         Ok(())
     }
@@ -244,7 +258,7 @@ impl Source for FileSourceRobust {
             let mut metrics = self.metrics.lock().unwrap();
             metrics.errors += 1;
         }
-        
+
         match error {
             DslError::Source(ref msg) if msg.contains("End of file") => {
                 if self.loop_on_eof {
@@ -286,18 +300,15 @@ mod tests {
     #[tokio::test]
     async fn test_file_source_creation() {
         gst::init().ok();
-        
+
         // Create a temporary file
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.mp4");
         let mut file = File::create(&file_path).unwrap();
         writeln!(file, "test content").unwrap();
-        
-        let source = FileSourceRobust::new(
-            "test_source".to_string(),
-            file_path
-        );
-        
+
+        let source = FileSourceRobust::new("test_source".to_string(), file_path);
+
         assert!(source.is_ok());
         let source = source.unwrap();
         assert_eq!(source.name(), "test_source");
@@ -307,29 +318,26 @@ mod tests {
     #[tokio::test]
     async fn test_file_not_found() {
         gst::init().ok();
-        
+
         let source = FileSourceRobust::new(
             "test_source".to_string(),
-            PathBuf::from("/non/existent/file.mp4")
+            PathBuf::from("/non/existent/file.mp4"),
         );
-        
+
         assert!(source.is_err());
     }
 
     #[test]
     fn test_restart_count() {
         gst::init().ok();
-        
+
         // Create a temporary file
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("test.mp4");
         File::create(&file_path).unwrap();
-        
-        let source = FileSourceRobust::new(
-            "test_source".to_string(),
-            file_path
-        ).unwrap();
-        
+
+        let source = FileSourceRobust::new("test_source".to_string(), file_path).unwrap();
+
         assert_eq!(source.get_restart_count(), 0);
         *source.restart_count.lock().unwrap() += 1;
         assert_eq!(source.get_restart_count(), 1);

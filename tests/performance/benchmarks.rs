@@ -2,11 +2,11 @@
 //!
 //! Establishes baselines for throughput, latency, scalability, and memory usage.
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use dsl_rs::core::*;
 use dsl_rs::pipeline::robust_pipeline::RobustPipeline;
-use dsl_rs::stream::{StreamManager, StreamConfig};
 use dsl_rs::recovery::*;
+use dsl_rs::stream::{StreamConfig, StreamManager};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -27,8 +27,12 @@ fn benchmark_stream_creation(c: &mut Criterion) {
 
 fn benchmark_state_transitions(c: &mut Criterion) {
     let mut group = c.benchmark_group("state_transitions");
-    
-    for state in &[StreamState::Idle, StreamState::Running, StreamState::Recovering] {
+
+    for state in &[
+        StreamState::Idle,
+        StreamState::Running,
+        StreamState::Recovering,
+    ] {
         group.bench_with_input(
             BenchmarkId::new("state", format!("{:?}", state)),
             state,
@@ -54,7 +58,7 @@ fn benchmark_state_transitions(c: &mut Criterion) {
 
 fn benchmark_recovery_decisions(c: &mut Criterion) {
     let manager = RecoveryManager::new();
-    
+
     c.bench_function("recovery_decision", |b| {
         b.iter(|| {
             // Benchmark checking if recovery should be attempted
@@ -83,38 +87,34 @@ fn benchmark_metrics_update(c: &mut Criterion) {
 
 fn benchmark_concurrent_streams(c: &mut Criterion) {
     let mut group = c.benchmark_group("concurrent_streams");
-    
+
     // Initialize GStreamer for benchmarks
     let _ = init_gstreamer();
-    
+
     for count in &[1, 5, 10, 20] {
-        group.bench_with_input(
-            BenchmarkId::from_parameter(count),
-            count,
-            |b, &count| {
-                b.iter_with_setup(
-                    || {
-                        // Setup: Create a pipeline for each iteration
-                        let config = PipelineConfig::default();
-                        Arc::new(RobustPipeline::new(config).unwrap())
-                    },
-                    |pipeline| {
-                        // Benchmark: Create stream manager and add configs
-                        let _manager = StreamManager::new(pipeline);
-                        for i in 0..count {
-                            let config = StreamConfig {
-                                name: format!("stream_{}", i),
-                                buffer_size: 100,
-                                max_latency: Some(1000),
-                                enable_isolation: true,
-                                queue_properties: Default::default(),
-                            };
-                            std::hint::black_box(config);
-                        }
+        group.bench_with_input(BenchmarkId::from_parameter(count), count, |b, &count| {
+            b.iter_with_setup(
+                || {
+                    // Setup: Create a pipeline for each iteration
+                    let config = PipelineConfig::default();
+                    Arc::new(RobustPipeline::new(config).unwrap())
+                },
+                |pipeline| {
+                    // Benchmark: Create stream manager and add configs
+                    let _manager = StreamManager::new(pipeline);
+                    for i in 0..count {
+                        let config = StreamConfig {
+                            name: format!("stream_{}", i),
+                            buffer_size: 100,
+                            max_latency: Some(1000),
+                            enable_isolation: true,
+                            queue_properties: Default::default(),
+                        };
+                        std::hint::black_box(config);
                     }
-                );
-            },
-        );
+                },
+            );
+        });
     }
     group.finish();
 }

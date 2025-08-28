@@ -1,19 +1,17 @@
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::collections::{HashMap, VecDeque};
 
 use dashmap::DashMap;
 use tracing::{debug, error, info, warn};
 
-use crate::core::{
-    DslError, DslResult, RecoveryAction, RecoveryStrategy, RetryConfig
-};
+use crate::core::{DslError, DslResult, RecoveryAction, RecoveryStrategy, RetryConfig};
 
 #[derive(Clone)]
 pub enum RecoveryPolicy {
-    Immediate,      // Retry immediately
-    FixedDelay,     // Fixed delay between retries
-    Exponential,    // Exponential backoff
+    Immediate,   // Retry immediately
+    FixedDelay,  // Fixed delay between retries
+    Exponential, // Exponential backoff
     Custom(Box<dyn RecoveryStrategy>),
 }
 
@@ -38,9 +36,9 @@ impl Default for CircuitBreakerConfig {
 
 #[derive(Debug, Clone, PartialEq)]
 enum CircuitState {
-    Closed,    // Normal operation
-    Open,      // Blocking requests
-    HalfOpen,  // Testing recovery
+    Closed,   // Normal operation
+    Open,     // Blocking requests
+    HalfOpen, // Testing recovery
 }
 
 struct CircuitBreaker {
@@ -82,7 +80,7 @@ impl CircuitBreaker {
 
     fn on_failure(&mut self) {
         self.last_failure_time = Some(Instant::now());
-        
+
         match self.state {
             CircuitState::Closed => {
                 self.failure_count += 1;
@@ -118,9 +116,7 @@ impl CircuitBreaker {
                     false
                 }
             }
-            CircuitState::HalfOpen => {
-                self.success_count < self.config.half_open_attempts
-            }
+            CircuitState::HalfOpen => self.success_count < self.config.half_open_attempts,
         }
     }
 }
@@ -242,7 +238,7 @@ impl RecoveryManager {
         attempt: u32,
     ) -> DslResult<RecoveryAction> {
         let start_time = Instant::now();
-        
+
         // Check circuit breaker
         if !self.should_attempt_recovery(stream_name) {
             return Ok(RecoveryAction::Escalate);
@@ -252,7 +248,8 @@ impl RecoveryManager {
         self.record_failure(stream_name, error);
 
         // Get recovery policy
-        let policy = self.policies
+        let policy = self
+            .policies
             .get(stream_name)
             .map(|p| p.clone())
             .unwrap_or(RecoveryPolicy::Exponential);
@@ -270,15 +267,19 @@ impl RecoveryManager {
                 RecoveryAction::Retry
             }
             RecoveryPolicy::Exponential => {
-                let config = self.retry_configs
+                let config = self
+                    .retry_configs
                     .get(stream_name)
                     .map(|c| c.clone())
                     .unwrap_or_default();
-                
+
                 let delay = self.calculate_exponential_delay(&config, attempt);
-                debug!("Exponential backoff recovery for {} ({:?})", stream_name, delay);
+                debug!(
+                    "Exponential backoff recovery for {} ({:?})",
+                    stream_name, delay
+                );
                 std::thread::sleep(delay);
-                
+
                 if attempt >= config.max_attempts {
                     RecoveryAction::Escalate
                 } else {
@@ -317,7 +318,7 @@ impl RecoveryManager {
         let base = config.initial_delay.as_millis() as f64;
         let exponential = base * config.exponential_base.powi(attempt as i32);
         let clamped = exponential.min(config.max_delay.as_millis() as f64);
-        
+
         let final_delay = if config.jitter {
             // Add random jitter (+/- 20%)
             let jitter = clamped * 0.2 * (2.0 * rand() - 1.0);
@@ -325,7 +326,7 @@ impl RecoveryManager {
         } else {
             clamped
         };
-        
+
         Duration::from_millis(final_delay as u64)
     }
 
@@ -338,7 +339,7 @@ impl RecoveryManager {
 
         let mut history = self.failure_history.lock().unwrap();
         history.push_back(pattern);
-        
+
         // Keep only last 1000 failures
         while history.len() > 1000 {
             history.pop_front();
@@ -347,7 +348,8 @@ impl RecoveryManager {
 
     pub fn get_failure_patterns(&self, stream_name: &str) -> Vec<String> {
         let history = self.failure_history.lock().unwrap();
-        history.iter()
+        history
+            .iter()
             .filter(|p| p.stream_name == stream_name)
             .map(|p| p.error_type.clone())
             .collect()
@@ -356,7 +358,8 @@ impl RecoveryManager {
     pub fn get_recent_failures(&self, duration: Duration) -> Vec<FailurePattern> {
         let cutoff = Instant::now() - duration;
         let history = self.failure_history.lock().unwrap();
-        history.iter()
+        history
+            .iter()
             .filter(|p| p.timestamp > cutoff)
             .cloned()
             .collect()
@@ -377,7 +380,8 @@ impl RecoveryManager {
     }
 
     pub fn get_circuit_state(&self, stream_name: &str) -> Option<CircuitState> {
-        self.circuit_breakers.get(stream_name)
+        self.circuit_breakers
+            .get(stream_name)
             .map(|b| b.lock().unwrap().state.clone())
     }
 }
@@ -444,21 +448,21 @@ mod tests {
             timeout: Duration::from_millis(100),
             half_open_attempts: 3,
         };
-        
+
         let mut breaker = CircuitBreaker::new(config);
         assert_eq!(breaker.state, CircuitState::Closed);
-        
+
         // Trip the breaker
         breaker.on_failure();
         assert_eq!(breaker.state, CircuitState::Closed);
         breaker.on_failure();
         assert_eq!(breaker.state, CircuitState::Open);
-        
+
         // Wait for timeout
         std::thread::sleep(Duration::from_millis(150));
         assert!(breaker.should_allow_request());
         assert_eq!(breaker.state, CircuitState::HalfOpen);
-        
+
         // Success in half-open
         breaker.on_success();
         breaker.on_success();
@@ -468,13 +472,16 @@ mod tests {
     #[tokio::test]
     async fn test_recovery_manager_policies() {
         let manager = RecoveryManager::new();
-        
+
         // Set immediate policy
         manager.set_policy("stream1".to_string(), RecoveryPolicy::Immediate);
-        
+
         // Execute recovery
         let error = DslError::Network("test error".to_string());
-        let action = manager.execute_recovery("stream1", &error, 0).await.unwrap();
+        let action = manager
+            .execute_recovery("stream1", &error, 0)
+            .await
+            .unwrap();
         assert_eq!(action, RecoveryAction::Retry);
     }
 
@@ -488,11 +495,11 @@ mod tests {
             jitter: false,
             max_attempts: 5,
         };
-        
+
         let delay0 = manager.calculate_exponential_delay(&config, 0);
         let delay1 = manager.calculate_exponential_delay(&config, 1);
         let delay2 = manager.calculate_exponential_delay(&config, 2);
-        
+
         assert_eq!(delay0, Duration::from_millis(100));
         assert_eq!(delay1, Duration::from_millis(200));
         assert_eq!(delay2, Duration::from_millis(400));
@@ -501,12 +508,12 @@ mod tests {
     #[test]
     fn test_failure_history() {
         let manager = RecoveryManager::new();
-        
+
         // Record some failures
         manager.record_failure("stream1", &DslError::Network("error1".to_string()));
         manager.record_failure("stream2", &DslError::Network("error2".to_string()));
         manager.record_failure("stream1", &DslError::Network("error3".to_string()));
-        
+
         // Get patterns for stream1
         let patterns = manager.get_failure_patterns("stream1");
         assert_eq!(patterns.len(), 2);

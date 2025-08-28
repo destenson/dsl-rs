@@ -7,8 +7,7 @@ use gstreamer::prelude::*;
 use tracing::{debug, error, info, warn};
 
 use crate::core::{
-    DslError, DslResult, Source, StreamState, StreamMetrics, 
-    RetryConfig, RecoveryAction
+    DslError, DslResult, RecoveryAction, RetryConfig, Source, StreamMetrics, StreamState,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,12 +22,12 @@ pub enum ConnectionState {
 #[derive(Debug, Clone)]
 pub struct RtspConfig {
     pub uri: String,
-    pub protocols: u32, // GstRTSPLowerTrans flags
-    pub latency: u32,   // milliseconds
-    pub timeout: u64,   // microseconds
+    pub protocols: u32,         // GstRTSPLowerTrans flags
+    pub latency: u32,           // milliseconds
+    pub timeout: u64,           // microseconds
     pub reconnect_timeout: u64, // microseconds
-    pub tcp_timeout: u64, // microseconds
-    pub buffer_mode: i32, // 0=none, 1=slave, 2=buffer, 3=auto, 4=synced
+    pub tcp_timeout: u64,       // microseconds
+    pub buffer_mode: i32,       // 0=none, 1=slave, 2=buffer, 3=auto, 4=synced
     pub ntp_sync: bool,
     pub retry_on_401: bool,
     pub user_agent: Option<String>,
@@ -42,10 +41,10 @@ impl Default for RtspConfig {
             uri: String::new(),
             protocols: 0x00000004, // TCP
             latency: 100,
-            timeout: 5_000_000, // 5 seconds
-            reconnect_timeout: 5_000_000, // 5 seconds  
-            tcp_timeout: 5_000_000, // 5 seconds
-            buffer_mode: 3, // auto
+            timeout: 5_000_000,           // 5 seconds
+            reconnect_timeout: 5_000_000, // 5 seconds
+            tcp_timeout: 5_000_000,       // 5 seconds
+            buffer_mode: 3,               // auto
             ntp_sync: false,
             retry_on_401: true,
             user_agent: Some("dsl-rs/1.0".to_string()),
@@ -70,7 +69,7 @@ pub struct RtspSourceRobust {
 
 impl RtspSourceRobust {
     pub fn new(name: String, uri: String) -> DslResult<Self> {
-        let mut config = RtspConfig{
+        let mut config = RtspConfig {
             uri,
             ..Default::default()
         };
@@ -143,7 +142,7 @@ impl RtspSourceRobust {
         element.connect("select-stream", false, move |values| {
             if let (Some(num), Some(caps)) = (
                 values[1].get::<u32>().ok(),
-                values[2].get::<gst::Caps>().ok()
+                values[2].get::<gst::Caps>().ok(),
             ) {
                 debug!("Stream {} selected for {}: {:?}", num, name_stream, caps);
             }
@@ -154,15 +153,15 @@ impl RtspSourceRobust {
     async fn attempt_connection(&mut self) -> DslResult<()> {
         *self.connection_state.lock().unwrap() = ConnectionState::Connecting;
         *self.last_connect_attempt.lock().unwrap() = Instant::now();
-        
+
         info!("Attempting to connect to RTSP source: {}", self.config.uri);
-        
+
         // Set to playing state
         match self.element.set_state(gst::State::Playing) {
             Ok(_) => {
                 // Wait a bit to see if connection succeeds
                 std::thread::sleep(Duration::from_millis(100));
-                
+
                 // Check state
                 let (_, current, _) = self.element.state(Some(gst::ClockTime::from_seconds(1)));
                 if current == gst::State::Playing {
@@ -173,7 +172,8 @@ impl RtspSourceRobust {
                 } else {
                     *self.connection_state.lock().unwrap() = ConnectionState::Failed;
                     Err(DslError::Network(format!(
-                        "Failed to reach playing state for {}", self.name
+                        "Failed to reach playing state for {}",
+                        self.name
                     )))
                 }
             }
@@ -181,7 +181,8 @@ impl RtspSourceRobust {
                 *self.connection_state.lock().unwrap() = ConnectionState::Failed;
                 *self.consecutive_failures.lock().unwrap() += 1;
                 Err(DslError::Network(format!(
-                    "Failed to connect to RTSP source {}: {}", self.name, e
+                    "Failed to connect to RTSP source {}: {}",
+                    self.name, e
                 )))
             }
         }
@@ -189,18 +190,22 @@ impl RtspSourceRobust {
 
     async fn reconnect_with_backoff(&mut self) -> DslResult<()> {
         let mut attempt = 0u32;
-        
+
         while attempt < self.retry_config.max_attempts {
             *self.connection_state.lock().unwrap() = ConnectionState::Reconnecting;
-            
+
             // Calculate delay with exponential backoff
             let delay = self.calculate_retry_delay(attempt);
-            
-            info!("Reconnection attempt {} for {} in {:?}", 
-                attempt + 1, self.name, delay);
-            
+
+            info!(
+                "Reconnection attempt {} for {} in {:?}",
+                attempt + 1,
+                self.name,
+                delay
+            );
+
             std::thread::sleep(delay);
-            
+
             // Try to reconnect
             match self.attempt_connection().await {
                 Ok(()) => {
@@ -208,16 +213,21 @@ impl RtspSourceRobust {
                     return Ok(());
                 }
                 Err(e) => {
-                    warn!("Reconnection attempt {} failed for {}: {:?}", 
-                        attempt + 1, self.name, e);
+                    warn!(
+                        "Reconnection attempt {} failed for {}: {:?}",
+                        attempt + 1,
+                        self.name,
+                        e
+                    );
                     attempt += 1;
                 }
             }
         }
-        
+
         *self.connection_state.lock().unwrap() = ConnectionState::Failed;
         Err(DslError::RecoveryFailed(format!(
-            "Failed to reconnect after {} attempts", self.retry_config.max_attempts
+            "Failed to reconnect after {} attempts",
+            self.retry_config.max_attempts
         )))
     }
 
@@ -225,7 +235,7 @@ impl RtspSourceRobust {
         let base_delay = self.retry_config.initial_delay.as_millis() as f64;
         let exp_delay = base_delay * self.retry_config.exponential_base.powi(attempt as i32);
         let clamped_delay = exp_delay.min(self.retry_config.max_delay.as_millis() as f64);
-        
+
         let delay = if self.retry_config.jitter {
             // Add jitter: +/- 20%
             let jitter = clamped_delay * 0.2 * (rand::random::<f64>() - 0.5);
@@ -233,7 +243,7 @@ impl RtspSourceRobust {
         } else {
             clamped_delay
         };
-        
+
         Duration::from_millis(delay as u64)
     }
 
@@ -277,10 +287,10 @@ impl Source for RtspSourceRobust {
 
     async fn connect(&mut self) -> DslResult<()> {
         *self.state.lock().unwrap() = StreamState::Starting;
-        
+
         // Setup signal handlers
         self.setup_signal_handlers().await;
-        
+
         // Attempt initial connection
         match self.attempt_connection().await {
             Ok(()) => {
@@ -297,11 +307,12 @@ impl Source for RtspSourceRobust {
     async fn disconnect(&mut self) -> DslResult<()> {
         *self.state.lock().unwrap() = StreamState::Stopped;
         *self.connection_state.lock().unwrap() = ConnectionState::Disconnected;
-        
+
         // Stop the element
-        self.element.set_state(gst::State::Null)
+        self.element
+            .set_state(gst::State::Null)
             .map_err(|_| DslError::Source("Failed to stop RTSP source".to_string()))?;
-        
+
         info!("RTSP source {} disconnected", self.name);
         Ok(())
     }
@@ -323,11 +334,11 @@ impl Source for RtspSourceRobust {
             let mut metrics = self.metrics.lock().unwrap();
             metrics.errors += 1;
         }
-        
+
         match error {
             DslError::Network(ref msg) => {
                 warn!("Network error for {}: {}", self.name, msg);
-                
+
                 // Try to reconnect with backoff
                 match self.reconnect_with_backoff().await {
                     Ok(()) => {
@@ -362,7 +373,7 @@ impl Drop for RtspSourceRobust {
 
 // Helper function for random jitter (simple implementation)
 mod rand {
-    pub fn random<T>() -> T 
+    pub fn random<T>() -> T
     where
         T: From<f64>,
     {
@@ -390,12 +401,12 @@ mod tests {
     #[tokio::test]
     async fn test_rtsp_source_creation() {
         gst::init().ok();
-        
+
         let source = RtspSourceRobust::new(
             "test_rtsp".to_string(),
-            "rtsp://example.com/stream".to_string()
+            "rtsp://example.com/stream".to_string(),
         );
-        
+
         assert!(source.is_ok());
         let source = source.unwrap();
         assert_eq!(source.name(), "test_rtsp");
@@ -406,17 +417,14 @@ mod tests {
     #[test]
     fn test_retry_delay_calculation() {
         gst::init().ok();
-        
-        let source = RtspSourceRobust::new(
-            "test".to_string(),
-            "rtsp://test".to_string()
-        ).unwrap();
-        
+
+        let source = RtspSourceRobust::new("test".to_string(), "rtsp://test".to_string()).unwrap();
+
         // Test exponential backoff
         let delay0 = source.calculate_retry_delay(0);
         let delay1 = source.calculate_retry_delay(1);
         let delay2 = source.calculate_retry_delay(2);
-        
+
         assert!(delay1 > delay0);
         assert!(delay2 > delay1);
         assert!(delay2 <= source.retry_config.max_delay);
@@ -425,12 +433,9 @@ mod tests {
     #[test]
     fn test_network_error_classification() {
         gst::init().ok();
-        
-        let source = RtspSourceRobust::new(
-            "test".to_string(),
-            "rtsp://test".to_string()
-        ).unwrap();
-        
+
+        let source = RtspSourceRobust::new("test".to_string(), "rtsp://test".to_string()).unwrap();
+
         assert_eq!(
             source.classify_network_error("401 Unauthorized"),
             RecoveryAction::Replace

@@ -1,14 +1,12 @@
-use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use dashmap::DashMap;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use tracing::{debug, error, info, warn};
 
-use crate::core::{
-    DslError, DslResult, Source, Sink, StreamState, StreamHealth
-};
+use crate::core::{DslError, DslResult, Sink, Source, StreamHealth, StreamState};
 use crate::pipeline::robust_pipeline::RobustPipeline;
 
 #[derive(Debug, Clone)]
@@ -84,11 +82,9 @@ impl StreamManager {
         config: StreamConfig,
     ) -> DslResult<String> {
         let stream_name = format!("{}_{}", config.name, uuid::Uuid::new_v4());
-        
+
         // Create isolated bin for this stream
-        let bin = gst::Bin::builder()
-            .name(&stream_name)
-            .build();
+        let bin = gst::Bin::builder().name(&stream_name).build();
 
         // Add source element to bin
         let source_element = source.element();
@@ -101,8 +97,18 @@ impl StreamManager {
             .property("max-size-buffers", config.queue_properties.max_size_buffers)
             .property("max-size-bytes", config.queue_properties.max_size_bytes)
             .property("max-size-time", config.queue_properties.max_size_time)
-            .property("min-threshold-buffers", config.queue_properties.min_threshold_buffers)
-            .property("leaky", if config.queue_properties.leaky { 2i32 } else { 0i32 })
+            .property(
+                "min-threshold-buffers",
+                config.queue_properties.min_threshold_buffers,
+            )
+            .property(
+                "leaky",
+                if config.queue_properties.leaky {
+                    2i32
+                } else {
+                    0i32
+                },
+            )
             .build()
             .map_err(|_| DslError::Stream("Failed to create source queue".to_string()))?;
 
@@ -126,15 +132,17 @@ impl StreamManager {
             .map_err(|_| DslError::Stream("Failed to link stream elements".to_string()))?;
 
         // Create ghost pads for bin connectivity
-        let src_pad = sink_queue.static_pad("src")
+        let src_pad = sink_queue
+            .static_pad("src")
             .ok_or_else(|| DslError::Stream("No src pad on sink queue".to_string()))?;
-        
+
         let ghost_pad = gst::GhostPad::with_target(&src_pad)
             .map_err(|_| DslError::Stream("Failed to create ghost pad".to_string()))?;
-        
-        ghost_pad.set_active(true)
+
+        ghost_pad
+            .set_active(true)
             .map_err(|_| DslError::Stream("Failed to activate ghost pad".to_string()))?;
-        
+
         bin.add_pad(&ghost_pad)
             .map_err(|_| DslError::Stream("Failed to add ghost pad to bin".to_string()))?;
 
@@ -163,12 +171,10 @@ impl StreamManager {
         Ok(stream_name)
     }
 
-    pub async fn add_sink(
-        &self,
-        mut sink: Box<dyn Sink>,
-        stream_name: &str,
-    ) -> DslResult<()> {
-        let stream = self.streams.get(stream_name)
+    pub async fn add_sink(&self, mut sink: Box<dyn Sink>, stream_name: &str) -> DslResult<()> {
+        let stream = self
+            .streams
+            .get(stream_name)
             .ok_or_else(|| DslError::Stream(format!("Stream {} not found", stream_name)))?;
 
         // Prepare the sink
@@ -177,19 +183,25 @@ impl StreamManager {
         // Add sink element to the stream's bin
         let sink_element = sink.element().clone();
         let sink_name = sink.name().to_string();
-        
-        stream.bin.add(&sink_element)
+
+        stream
+            .bin
+            .add(&sink_element)
             .map_err(|_| DslError::Stream("Failed to add sink to bin".to_string()))?;
 
         // Link sink queue to sink
-        stream.sink_queue.link(&sink_element)
+        stream
+            .sink_queue
+            .link(&sink_element)
             .map_err(|_| DslError::Stream("Failed to link sink to queue".to_string()))?;
 
         // Store the sink
-        self.active_sinks.insert(format!("{}_{}", stream_name, sink_name), sink);
+        self.active_sinks
+            .insert(format!("{}_{}", stream_name, sink_name), sink);
 
         // Sync sink state with bin
-        sink_element.sync_state_with_parent()
+        sink_element
+            .sync_state_with_parent()
             .map_err(|_| DslError::Stream("Failed to sync sink state".to_string()))?;
 
         info!("Added sink to stream: {}", stream_name);
@@ -198,8 +210,7 @@ impl StreamManager {
 
     pub async fn remove_source(&self, stream_name: &str) -> DslResult<()> {
         // Get and remove the source
-        let source = self.active_sources.remove(stream_name)
-            .map(|(_, s)| s);
+        let source = self.active_sources.remove(stream_name).map(|(_, s)| s);
 
         if let Some(mut source) = source {
             // Disconnect the source
@@ -217,13 +228,12 @@ impl StreamManager {
     }
 
     pub async fn remove_sink(&self, sink_name: &str) -> DslResult<()> {
-        let sink = self.active_sinks.remove(sink_name)
-            .map(|(_, s)| s);
+        let sink = self.active_sinks.remove(sink_name).map(|(_, s)| s);
 
         if let Some(mut sink) = sink {
             // Cleanup the sink
             sink.cleanup().await?;
-            
+
             // Remove sink element from pipeline
             // Note: In production, would need to properly unlink and remove
         }
@@ -233,48 +243,61 @@ impl StreamManager {
     }
 
     pub fn get_stream_health(&self, stream_name: &str) -> Option<StreamHealth> {
-        self.streams.get(stream_name)
+        self.streams
+            .get(stream_name)
             .and_then(|stream| Some(stream.health.lock().unwrap().clone()))
     }
 
     pub fn list_streams(&self) -> Vec<String> {
-        self.streams.iter()
+        self.streams
+            .iter()
             .map(|entry| entry.key().clone())
             .collect()
     }
 
     pub fn get_stream_state(&self, stream_name: &str) -> Option<StreamState> {
-        self.active_sources.get(stream_name)
+        self.active_sources
+            .get(stream_name)
             .map(|source| source.state())
     }
 
     pub async fn pause_stream(&self, stream_name: &str) -> DslResult<()> {
         if let Some(stream) = self.streams.get(stream_name) {
-            stream.bin.set_state(gst::State::Paused)
+            stream
+                .bin
+                .set_state(gst::State::Paused)
                 .map_err(|_| DslError::Stream("Failed to pause stream".to_string()))?;
-            
+
             let mut health = stream.health.lock().unwrap();
             health.state = StreamState::Paused;
-            
+
             info!("Paused stream: {}", stream_name);
             Ok(())
         } else {
-            Err(DslError::Stream(format!("Stream {} not found", stream_name)))
+            Err(DslError::Stream(format!(
+                "Stream {} not found",
+                stream_name
+            )))
         }
     }
 
     pub async fn resume_stream(&self, stream_name: &str) -> DslResult<()> {
         if let Some(stream) = self.streams.get(stream_name) {
-            stream.bin.set_state(gst::State::Playing)
+            stream
+                .bin
+                .set_state(gst::State::Playing)
                 .map_err(|_| DslError::Stream("Failed to resume stream".to_string()))?;
-            
+
             let mut health = stream.health.lock().unwrap();
             health.state = StreamState::Running;
-            
+
             info!("Resumed stream: {}", stream_name);
             Ok(())
         } else {
-            Err(DslError::Stream(format!("Stream {} not found", stream_name)))
+            Err(DslError::Stream(format!(
+                "Stream {} not found",
+                stream_name
+            )))
         }
     }
 
@@ -283,75 +306,98 @@ impl StreamManager {
             // Disconnect and reconnect
             source.disconnect().await?;
             source.connect().await?;
-            
+
             info!("Reconnected source: {}", stream_name);
             Ok(())
         } else {
-            Err(DslError::Stream(format!("Source {} not found", stream_name)))
+            Err(DslError::Stream(format!(
+                "Source {} not found",
+                stream_name
+            )))
         }
     }
 
     pub fn update_queue_config(&self, stream_name: &str, config: QueueConfig) -> DslResult<()> {
         if let Some(stream) = self.streams.get(stream_name) {
             // Update source queue properties
-            stream.source_queue.set_property("max-size-buffers", config.max_size_buffers);
-            stream.source_queue.set_property("max-size-bytes", config.max_size_bytes);
-            stream.source_queue.set_property("max-size-time", config.max_size_time);
-            stream.source_queue.set_property("min-threshold-buffers", config.min_threshold_buffers);
-            
+            stream
+                .source_queue
+                .set_property("max-size-buffers", config.max_size_buffers);
+            stream
+                .source_queue
+                .set_property("max-size-bytes", config.max_size_bytes);
+            stream
+                .source_queue
+                .set_property("max-size-time", config.max_size_time);
+            stream
+                .source_queue
+                .set_property("min-threshold-buffers", config.min_threshold_buffers);
+
             // Update sink queue properties
-            stream.sink_queue.set_property("max-size-buffers", config.max_size_buffers);
-            stream.sink_queue.set_property("max-size-bytes", config.max_size_bytes);
-            stream.sink_queue.set_property("max-size-time", config.max_size_time);
-            
+            stream
+                .sink_queue
+                .set_property("max-size-buffers", config.max_size_buffers);
+            stream
+                .sink_queue
+                .set_property("max-size-bytes", config.max_size_bytes);
+            stream
+                .sink_queue
+                .set_property("max-size-time", config.max_size_time);
+
             debug!("Updated queue configuration for stream: {}", stream_name);
             Ok(())
         } else {
-            Err(DslError::Stream(format!("Stream {} not found", stream_name)))
+            Err(DslError::Stream(format!(
+                "Stream {} not found",
+                stream_name
+            )))
         }
     }
 
     pub async fn handle_stream_error(&self, stream_name: &str, error: DslError) -> DslResult<()> {
         warn!("Handling error for stream {}: {:?}", stream_name, error);
-        
+
         if let Some(stream) = self.streams.get(stream_name) {
             let mut health = stream.health.lock().unwrap();
             health.last_error = Some(error.clone());
             health.consecutive_errors += 1;
-            
+
             // Check if we should attempt recovery
             if health.consecutive_errors < 5 {
                 health.state = StreamState::Recovering;
                 drop(health); // Release lock
-                
+
                 // Attempt to reconnect the source
                 if let Err(e) = self.reconnect_source(stream_name).await {
                     error!("Failed to reconnect source {}: {:?}", stream_name, e);
-                    
+
                     let mut health = stream.health.lock().unwrap();
                     health.state = StreamState::Failed;
                     return Err(e);
                 }
-                
+
                 let mut health = stream.health.lock().unwrap();
                 health.state = StreamState::Running;
                 health.recovery_attempts += 1;
-                
+
                 info!("Successfully recovered stream: {}", stream_name);
                 Ok(())
             } else {
                 health.state = StreamState::Failed;
                 error!("Stream {} has failed after too many errors", stream_name);
-                Err(DslError::RecoveryFailed(
-                    format!("Stream {} exceeded maximum error count", stream_name)
-                ))
+                Err(DslError::RecoveryFailed(format!(
+                    "Stream {} exceeded maximum error count",
+                    stream_name
+                )))
             }
         } else {
-            Err(DslError::Stream(format!("Stream {} not found", stream_name)))
+            Err(DslError::Stream(format!(
+                "Stream {} not found",
+                stream_name
+            )))
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

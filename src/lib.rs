@@ -9,7 +9,7 @@ pub mod stream;
 
 pub use gstreamer::glib;
 
-pub use core::{DslError, DslResult, init_gstreamer, init_logging};
+pub use core::{init_gstreamer, init_logging, DslError, DslResult};
 pub use pipeline::robust_pipeline::RobustPipeline;
 pub use stream::stream_manager::StreamManager;
 

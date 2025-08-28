@@ -1,3 +1,3 @@
 pub mod stream_manager;
 
-pub use stream_manager::{StreamManager, StreamConfig, StreamHandle};
+pub use stream_manager::{StreamConfig, StreamHandle, StreamManager};

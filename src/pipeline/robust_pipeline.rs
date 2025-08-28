@@ -1,15 +1,13 @@
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use std::collections::HashMap;
 
 use dashmap::DashMap;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use tracing::{debug, error, info, warn};
 
-use crate::core::{
-    DslError, DslResult, PipelineConfig, StreamState, StreamHealth, StreamMetrics
-};
+use crate::core::{DslError, DslResult, PipelineConfig, StreamHealth, StreamMetrics, StreamState};
 
 #[derive(Debug, Clone)]
 pub enum PipelineEvent {
@@ -73,7 +71,7 @@ impl WatchdogTimer {
                 let last = *entry.last_activity.lock().unwrap();
                 if now.duration_since(last) > timeout {
                     warn!("Stream {} watchdog timeout", entry.name);
-                    
+
                     let mut health = entry.health.lock().unwrap();
                     health.consecutive_errors += 1;
                     if health.state == StreamState::Running {
@@ -170,22 +168,34 @@ impl StateMachine {
     }
 
     fn transition(&mut self, stream: &str, condition: TransitionCondition) -> Option<StreamState> {
-        let current = self.states.get(stream).copied().unwrap_or(StreamState::Idle);
-        
+        let current = self
+            .states
+            .get(stream)
+            .copied()
+            .unwrap_or(StreamState::Idle);
+
         for transition in &self.transitions {
-            if transition.from == current && 
-               std::mem::discriminant(&transition.condition) == std::mem::discriminant(&condition) {
+            if transition.from == current
+                && std::mem::discriminant(&transition.condition)
+                    == std::mem::discriminant(&condition)
+            {
                 self.states.insert(stream.to_string(), transition.to);
-                info!("Stream {} transitioned from {:?} to {:?}", stream, current, transition.to);
+                info!(
+                    "Stream {} transitioned from {:?} to {:?}",
+                    stream, current, transition.to
+                );
                 return Some(transition.to);
             }
         }
-        
+
         None
     }
 
     fn get_state(&self, stream: &str) -> StreamState {
-        self.states.get(stream).copied().unwrap_or(StreamState::Idle)
+        self.states
+            .get(stream)
+            .copied()
+            .unwrap_or(StreamState::Idle)
     }
 }
 
@@ -221,14 +231,14 @@ impl MetricsCollector {
                     "Stream {} metrics - State: {:?}, FPS: {:.2}, Errors: {}",
                     entry.name, health.state, health.metrics.fps, health.metrics.errors
                 );
-                
+
                 metrics::counter!("stream_frames_processed", 
                     "stream" => entry.name.clone())
-                    .increment(health.metrics.frames_processed);
-                    
+                .increment(health.metrics.frames_processed);
+
                 metrics::gauge!("stream_fps",
                     "stream" => entry.name.clone())
-                    .set(health.metrics.fps);
+                .set(health.metrics.fps);
             }
 
             gstreamer::glib::ControlFlow::Continue
@@ -249,17 +259,19 @@ impl MetricsCollector {
 
 impl RobustPipeline {
     pub fn new(config: PipelineConfig) -> DslResult<Self> {
-        let pipeline = gst::Pipeline::builder()
-            .name(&config.name)
-            .build();
+        let pipeline = gst::Pipeline::builder().name(&config.name).build();
 
-        let bus = pipeline.bus().ok_or_else(|| 
-            DslError::Pipeline("Failed to get pipeline bus".to_string()))?;
+        let bus = pipeline
+            .bus()
+            .ok_or_else(|| DslError::Pipeline("Failed to get pipeline bus".to_string()))?;
 
         let streams = Arc::new(DashMap::new());
-        
+
         let watchdog = if config.enable_watchdog {
-            Some(WatchdogTimer::new(config.watchdog_timeout, Arc::clone(&streams)))
+            Some(WatchdogTimer::new(
+                config.watchdog_timeout,
+                Arc::clone(&streams),
+            ))
         } else {
             None
         };
@@ -284,12 +296,14 @@ impl RobustPipeline {
 
     pub fn add_stream(&self, name: String, bin: gst::Bin) -> DslResult<()> {
         if self.streams.len() >= self.config.max_streams {
-            return Err(DslError::ResourceExhaustion(
-                format!("Maximum streams ({}) reached", self.config.max_streams)
-            ));
+            return Err(DslError::ResourceExhaustion(format!(
+                "Maximum streams ({}) reached",
+                self.config.max_streams
+            )));
         }
 
-        self.pipeline.add(&bin)
+        self.pipeline
+            .add(&bin)
             .map_err(|e| DslError::Pipeline(format!("Failed to add stream bin: {}", e)))?;
 
         let stream_info = StreamInfo {
@@ -300,8 +314,10 @@ impl RobustPipeline {
         };
 
         self.streams.insert(name.clone(), stream_info);
-        
-        self.state_machine.lock().unwrap()
+
+        self.state_machine
+            .lock()
+            .unwrap()
             .transition(&name, TransitionCondition::OnSuccess);
 
         info!("Added stream: {}", name);
@@ -310,10 +326,12 @@ impl RobustPipeline {
 
     pub fn remove_stream(&self, name: &str) -> DslResult<()> {
         if let Some((_, info)) = self.streams.remove(name) {
-            info.bin.set_state(gst::State::Null)
+            info.bin
+                .set_state(gst::State::Null)
                 .map_err(|_| DslError::Pipeline("Failed to stop stream".to_string()))?;
 
-            self.pipeline.remove(&info.bin)
+            self.pipeline
+                .remove(&info.bin)
                 .map_err(|e| DslError::Pipeline(format!("Failed to remove stream bin: {}", e)))?;
 
             info!("Removed stream: {}", name);
@@ -324,7 +342,8 @@ impl RobustPipeline {
     }
 
     pub fn start(&self) -> DslResult<()> {
-        self.pipeline.set_state(gst::State::Playing)
+        self.pipeline
+            .set_state(gst::State::Playing)
             .map_err(|_| DslError::Pipeline("Failed to start pipeline".to_string()))?;
 
         if let Some(ref watchdog) = self.watchdog {
@@ -348,7 +367,8 @@ impl RobustPipeline {
 
         self.metrics_collector.stop();
 
-        self.pipeline.set_state(gst::State::Null)
+        self.pipeline
+            .set_state(gst::State::Null)
             .map_err(|_| DslError::Pipeline("Failed to stop pipeline".to_string()))?;
 
         // Signal the event loop thread to quit if it is running.
@@ -360,7 +380,8 @@ impl RobustPipeline {
     }
 
     pub fn pause(&self) -> DslResult<()> {
-        self.pipeline.set_state(gst::State::Paused)
+        self.pipeline
+            .set_state(gst::State::Paused)
             .map_err(|_| DslError::Pipeline("Failed to pause pipeline".to_string()))?;
 
         info!("Pipeline paused");
@@ -368,7 +389,8 @@ impl RobustPipeline {
     }
 
     pub fn resume(&self) -> DslResult<()> {
-        self.pipeline.set_state(gst::State::Playing)
+        self.pipeline
+            .set_state(gst::State::Playing)
             .map_err(|_| DslError::Pipeline("Failed to resume pipeline".to_string()))?;
 
         info!("Pipeline resumed");
@@ -396,37 +418,44 @@ impl RobustPipeline {
         let (tx, rx) = std::sync::mpsc::channel();
         *stop_signal.lock().unwrap() = Some(tx);
 
-        let watch = bus.add_watch(move |_, msg| {
-            match msg.view() {
-                gst::MessageView::Error(err) => {
-                    error!("Pipeline error: {:?}", err);
-                    state_machine.lock().unwrap()
-                        .transition("pipeline", TransitionCondition::OnError);
-                }
-                gst::MessageView::Warning(warn) => {
-                    warn!("Pipeline warning: {:?}", warn);
-                }
-                gst::MessageView::Eos(_) => {
-                    info!("End of stream");
-                }
-                gst::MessageView::StateChanged(state) => {
-                    if let Some(src) = state.src() {
-                        debug!("State changed for {}: {:?} -> {:?}", 
-                            src.name(), state.old(), state.current());
+        let watch = bus
+            .add_watch(move |_, msg| {
+                match msg.view() {
+                    gst::MessageView::Error(err) => {
+                        error!("Pipeline error: {:?}", err);
+                        state_machine
+                            .lock()
+                            .unwrap()
+                            .transition("pipeline", TransitionCondition::OnError);
                     }
-                }
-                gst::MessageView::StreamStatus(status) => {
-                    if let Some(src) = status.src() {
-                        if let Some(watchdog) = watchdog.as_ref() {
-                            watchdog.feed(&src.name());
+                    gst::MessageView::Warning(warn) => {
+                        warn!("Pipeline warning: {:?}", warn);
+                    }
+                    gst::MessageView::Eos(_) => {
+                        info!("End of stream");
+                    }
+                    gst::MessageView::StateChanged(state) => {
+                        if let Some(src) = state.src() {
+                            debug!(
+                                "State changed for {}: {:?} -> {:?}",
+                                src.name(),
+                                state.old(),
+                                state.current()
+                            );
                         }
                     }
+                    gst::MessageView::StreamStatus(status) => {
+                        if let Some(src) = status.src() {
+                            if let Some(watchdog) = watchdog.as_ref() {
+                                watchdog.feed(&src.name());
+                            }
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            }
-            gstreamer::glib::ControlFlow::Continue
-        })
-        .expect("Failed to add bus watch");
+                gstreamer::glib::ControlFlow::Continue
+            })
+            .expect("Failed to add bus watch");
 
         std::thread::spawn(move || {
             // Handle stop signal in a separate thread
@@ -435,21 +464,23 @@ impl RobustPipeline {
                     main_loop_quit.quit();
                 }
             });
-            
+
             main_loop.run();
-            
+
             // Keep the watch alive
             drop(watch);
         });
     }
 
     pub fn get_stream_health(&self, name: &str) -> Option<StreamHealth> {
-        self.streams.get(name)
+        self.streams
+            .get(name)
             .map(|info| info.health.lock().unwrap().clone())
     }
 
     pub fn get_all_stream_names(&self) -> Vec<String> {
-        self.streams.iter()
+        self.streams
+            .iter()
             .map(|entry| entry.key().clone())
             .collect()
     }
@@ -463,8 +494,10 @@ impl RobustPipeline {
 
     pub fn trigger_recovery(&self, stream_name: &str) -> DslResult<()> {
         let mut state_machine = self.state_machine.lock().unwrap();
-        
-        if let Some(new_state) = state_machine.transition(stream_name, TransitionCondition::OnRecovery) {
+
+        if let Some(new_state) =
+            state_machine.transition(stream_name, TransitionCondition::OnRecovery)
+        {
             if let Some(info) = self.streams.get(stream_name) {
                 let mut health = info.health.lock().unwrap();
                 health.state = new_state;
@@ -472,9 +505,10 @@ impl RobustPipeline {
             }
             Ok(())
         } else {
-            Err(DslError::StateTransition(
-                format!("Cannot recover stream {} from current state", stream_name)
-            ))
+            Err(DslError::StateTransition(format!(
+                "Cannot recover stream {} from current state",
+                stream_name
+            )))
         }
     }
 }
@@ -489,7 +523,6 @@ impl Clone for WatchdogTimer {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::pipeline;
@@ -499,15 +532,15 @@ mod tests {
     #[test]
     fn test_state_machine_transitions() {
         let mut sm = StateMachine::new();
-        
+
         assert_eq!(sm.get_state("test"), StreamState::Idle);
-        
+
         sm.transition("test", TransitionCondition::OnSuccess);
         assert_eq!(sm.get_state("test"), StreamState::Starting);
-        
+
         sm.transition("test", TransitionCondition::OnSuccess);
         assert_eq!(sm.get_state("test"), StreamState::Running);
-        
+
         sm.transition("test", TransitionCondition::OnError);
         assert_eq!(sm.get_state("test"), StreamState::Recovering);
     }
@@ -515,7 +548,7 @@ mod tests {
     #[test]
     fn test_pipeline_creation() {
         gst::init().ok();
-        
+
         let config = PipelineConfig::default();
         let pipeline = RobustPipeline::new(config);
         assert!(pipeline.is_ok());

@@ -11,37 +11,37 @@ use tracing::{debug, error, info, warn};
 pub enum DslError {
     #[error("Pipeline error: {0}")]
     Pipeline(String),
-    
+
     #[error("Stream error: {0}")]
     Stream(String),
-    
+
     #[error("Source error: {0}")]
     Source(String),
-    
+
     #[error("Sink error: {0}")]
     Sink(String),
-    
+
     #[error("Network error: {0}")]
     Network(String),
-    
+
     #[error("File I/O error: {0}")]
     FileIo(String),
-    
+
     #[error("Configuration error: {0}")]
     Configuration(String),
-    
+
     #[error("State transition error: {0}")]
     StateTransition(String),
-    
+
     #[error("Resource exhaustion: {0}")]
     ResourceExhaustion(String),
-    
+
     #[error("Recovery failed: {0}")]
     RecoveryFailed(String),
-    
+
     #[error("GStreamer error: {0}")]
     GStreamer(#[from] gst::glib::Error),
-    
+
     #[error("Other error: {0}")]
     Other(String),
 }
@@ -50,15 +50,14 @@ pub type DslResult<T> = Result<T, DslError>;
 
 pub fn init_logging() {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-    
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
-    
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(filter)
         .init();
-    
+
     info!("DSL-RS logging initialized");
 }
 
@@ -115,36 +114,36 @@ impl Default for StreamMetrics {
 #[async_trait]
 pub trait Source: Send + Sync {
     fn name(&self) -> &str;
-    
+
     fn element(&self) -> &gst::Element;
-    
+
     async fn connect(&mut self) -> DslResult<()>;
-    
+
     async fn disconnect(&mut self) -> DslResult<()>;
-    
+
     fn state(&self) -> StreamState;
-    
+
     fn metrics(&self) -> StreamMetrics;
-    
+
     fn set_retry_config(&mut self, config: RetryConfig);
-    
+
     async fn handle_error(&mut self, error: DslError) -> DslResult<RecoveryAction>;
 }
 
 #[async_trait]
 pub trait Sink: Send + Sync {
     fn name(&self) -> &str;
-    
+
     fn element(&self) -> &gst::Element;
-    
+
     async fn prepare(&mut self) -> DslResult<()>;
-    
+
     async fn cleanup(&mut self) -> DslResult<()>;
-    
+
     fn state(&self) -> StreamState;
-    
+
     fn metrics(&self) -> StreamMetrics;
-    
+
     async fn handle_error(&mut self, error: DslError) -> DslResult<RecoveryAction>;
 }
 
@@ -181,9 +180,9 @@ pub enum RecoveryAction {
 
 pub trait RecoveryStrategy: Send + Sync {
     fn decide_action(&self, error: &DslError, attempt: u32) -> RecoveryAction;
-    
+
     fn calculate_delay(&self, attempt: u32) -> Duration;
-    
+
     fn should_circuit_break(&self, recent_failures: u32) -> bool;
 }
 
@@ -206,9 +205,9 @@ impl StreamHealth {
             recovery_attempts: 0,
         }
     }
-    
+
     pub fn is_healthy(&self) -> bool {
-        matches!(self.state, StreamState::Running | StreamState::Paused) 
+        matches!(self.state, StreamState::Running | StreamState::Paused)
             && self.consecutive_errors < 3
     }
 }
@@ -263,10 +262,10 @@ mod tests {
     fn test_stream_health_healthy_check() {
         let mut health = StreamHealth::new();
         assert!(!health.is_healthy());
-        
+
         health.state = StreamState::Running;
         assert!(health.is_healthy());
-        
+
         health.consecutive_errors = 5;
         assert!(!health.is_healthy());
     }
