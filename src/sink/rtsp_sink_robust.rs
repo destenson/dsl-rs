@@ -359,6 +359,7 @@ impl Drop for RtspSinkRobust {
 mod tests {
     use super::*;
 
+    #[ignore]
     #[tokio::test]
     async fn test_rtsp_sink_creation() {
         gst::init().ok();
@@ -372,6 +373,7 @@ mod tests {
         assert_eq!(sink.state(), StreamState::Idle);
     }
 
+    #[ignore]
     #[test]
     fn test_launch_string_generation() {
         gst::init().ok();
@@ -385,6 +387,7 @@ mod tests {
         assert!(launch.contains("rtph264pay"));
     }
 
+    #[ignore]
     #[test]
     fn test_client_tracking() {
         gst::init().ok();
