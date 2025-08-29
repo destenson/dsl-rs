@@ -79,7 +79,7 @@ impl RtspSourceRobust {
     pub fn with_config(name: String, config: RtspConfig) -> DslResult<Self> {
         // Create rtspsrc element
         let rtspsrc = gst::ElementFactory::make("rtspsrc")
-            .name(format!("{}_rtspsrc", name))
+            .name(format!("{name}_rtspsrc"))
             .property("location", &config.uri)
             .property("latency", config.latency)
             .property("timeout", config.timeout)

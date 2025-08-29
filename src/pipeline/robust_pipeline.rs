@@ -110,10 +110,10 @@ struct StateTransition {
 
 #[derive(Debug, Clone)]
 enum TransitionCondition {
-    OnSuccess,
-    OnError,
-    OnTimeout,
-    OnRecovery,
+    Success,
+    Error,
+    Timeout,
+    Recovery,
 }
 
 impl StateMachine {
@@ -122,42 +122,42 @@ impl StateMachine {
             StateTransition {
                 from: StreamState::Idle,
                 to: StreamState::Starting,
-                condition: TransitionCondition::OnSuccess,
+                condition: TransitionCondition::Success,
             },
             StateTransition {
                 from: StreamState::Starting,
                 to: StreamState::Running,
-                condition: TransitionCondition::OnSuccess,
+                condition: TransitionCondition::Success,
             },
             StateTransition {
                 from: StreamState::Starting,
                 to: StreamState::Failed,
-                condition: TransitionCondition::OnError,
+                condition: TransitionCondition::Error,
             },
             StateTransition {
                 from: StreamState::Running,
                 to: StreamState::Recovering,
-                condition: TransitionCondition::OnError,
+                condition: TransitionCondition::Error,
             },
             StateTransition {
                 from: StreamState::Recovering,
                 to: StreamState::Running,
-                condition: TransitionCondition::OnRecovery,
+                condition: TransitionCondition::Recovery,
             },
             StateTransition {
                 from: StreamState::Recovering,
                 to: StreamState::Failed,
-                condition: TransitionCondition::OnTimeout,
+                condition: TransitionCondition::Timeout,
             },
             StateTransition {
                 from: StreamState::Running,
                 to: StreamState::Paused,
-                condition: TransitionCondition::OnSuccess,
+                condition: TransitionCondition::Success,
             },
             StateTransition {
                 from: StreamState::Paused,
                 to: StreamState::Running,
-                condition: TransitionCondition::OnSuccess,
+                condition: TransitionCondition::Success,
             },
         ];
 
@@ -181,8 +181,8 @@ impl StateMachine {
             {
                 self.states.insert(stream.to_string(), transition.to);
                 info!(
-                    "Stream {} transitioned from {:?} to {:?}",
-                    stream, current, transition.to
+                    "Stream {stream} transitioned from {:?} to {:?}",
+                    current, transition.to
                 );
                 return Some(transition.to);
             }
@@ -304,7 +304,7 @@ impl RobustPipeline {
 
         self.pipeline
             .add(&bin)
-            .map_err(|e| DslError::Pipeline(format!("Failed to add stream bin: {}", e)))?;
+            .map_err(|e| DslError::Pipeline(format!("Failed to add stream bin: {e}")))?;
 
         let stream_info = StreamInfo {
             name: name.clone(),
@@ -318,9 +318,9 @@ impl RobustPipeline {
         self.state_machine
             .lock()
             .unwrap()
-            .transition(&name, TransitionCondition::OnSuccess);
+            .transition(&name, TransitionCondition::Success);
 
-        info!("Added stream: {}", name);
+        info!("Added stream: {name}");
         Ok(())
     }
 
@@ -332,12 +332,12 @@ impl RobustPipeline {
 
             self.pipeline
                 .remove(&info.bin)
-                .map_err(|e| DslError::Pipeline(format!("Failed to remove stream bin: {}", e)))?;
+                .map_err(|e| DslError::Pipeline(format!("Failed to remove stream bin: {e}")))?;
 
-            info!("Removed stream: {}", name);
+            info!("Removed stream: {name}");
             Ok(())
         } else {
-            Err(DslError::Stream(format!("Stream {} not found", name)))
+            Err(DslError::Stream(format!("Stream {name} not found")))
         }
     }
 
@@ -408,7 +408,7 @@ impl RobustPipeline {
 
         let bus = self.event_bus.clone();
         let state_machine = Arc::clone(&self.state_machine);
-        let watchdog = self.watchdog.as_ref().map(|w| w.clone());
+        let watchdog = self.watchdog.clone();
         let stop_signal = Arc::clone(&self.stop_signal);
 
         let main_loop = gstreamer::glib::MainLoop::new(None, false);
@@ -426,7 +426,7 @@ impl RobustPipeline {
                         state_machine
                             .lock()
                             .unwrap()
-                            .transition("pipeline", TransitionCondition::OnError);
+                            .transition("pipeline", TransitionCondition::Error);
                     }
                     gst::MessageView::Warning(warn) => {
                         warn!("Pipeline warning: {:?}", warn);
@@ -496,7 +496,7 @@ impl RobustPipeline {
         let mut state_machine = self.state_machine.lock().unwrap();
 
         if let Some(new_state) =
-            state_machine.transition(stream_name, TransitionCondition::OnRecovery)
+            state_machine.transition(stream_name, TransitionCondition::Recovery)
         {
             if let Some(info) = self.streams.get(stream_name) {
                 let mut health = info.health.lock().unwrap();
@@ -506,8 +506,7 @@ impl RobustPipeline {
             Ok(())
         } else {
             Err(DslError::StateTransition(format!(
-                "Cannot recover stream {} from current state",
-                stream_name
+                "Cannot recover stream {stream_name} from current state",
             )))
         }
     }
@@ -535,13 +534,13 @@ mod tests {
 
         assert_eq!(sm.get_state("test"), StreamState::Idle);
 
-        sm.transition("test", TransitionCondition::OnSuccess);
+        sm.transition("test", TransitionCondition::Success);
         assert_eq!(sm.get_state("test"), StreamState::Starting);
 
-        sm.transition("test", TransitionCondition::OnSuccess);
+        sm.transition("test", TransitionCondition::Success);
         assert_eq!(sm.get_state("test"), StreamState::Running);
 
-        sm.transition("test", TransitionCondition::OnError);
+        sm.transition("test", TransitionCondition::Error);
         assert_eq!(sm.get_state("test"), StreamState::Recovering);
     }
 

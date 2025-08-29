@@ -93,7 +93,7 @@ impl StreamIsolator {
             let thread = thread::current();
             let thread_name = thread.name().unwrap_or("unknown");
 
-            error!("Panic in thread '{}': {:?}", thread_name, panic_info);
+            error!("Panic in thread '{thread_name}': {:?}", panic_info);
 
             // Check if this is a stream thread
             if thread_name.starts_with("stream_") {
@@ -108,7 +108,7 @@ impl StreamIsolator {
 
     pub fn isolate_stream(&self, name: String, bin: gst::Bin) -> DslResult<()> {
         if self.streams.contains_key(&name) {
-            return Err(DslError::Other(format!("Stream {} already isolated", name)));
+            return Err(DslError::Other(format!("Stream {name} already isolated")));
         }
 
         let isolated = Arc::new(Mutex::new(IsolatedStream {
@@ -130,8 +130,8 @@ impl StreamIsolator {
         self.streams.insert(name.clone(), isolated);
 
         info!(
-            "Stream {} isolated with resource quota: {:?}",
-            name, self.config.default_quota
+            "Stream {name} isolated with resource quota: {:?}",
+            self.config.default_quota
         );
 
         Ok(())
@@ -142,7 +142,7 @@ impl StreamIsolator {
         let pool_size = self.config.default_quota.max_threads;
 
         for i in 0..pool_size {
-            let name = format!("stream_{}_worker_{}", stream_name, i);
+            let name = format!("stream_{stream_name}_worker_{i}");
             let stream_name = stream_name.to_string();
             let streams = Arc::clone(&self.streams);
 
@@ -150,7 +150,7 @@ impl StreamIsolator {
                 .name(name.clone())
                 .stack_size(2 * 1024 * 1024) // 2MB stack
                 .spawn(move || {
-                    info!("Thread {} started", name);
+                    info!("Thread {name} started");
 
                     // Thread would handle stream processing tasks
                     loop {
@@ -162,9 +162,9 @@ impl StreamIsolator {
                         }
                     }
 
-                    info!("Thread {} terminated", name);
+                    info!("Thread {name} terminated");
                 })
-                .map_err(|e| DslError::Other(format!("Failed to create thread: {}", e)))?;
+                .map_err(|e| DslError::Other(format!("Failed to create thread: {e}")))?;
 
             threads.push(handle);
         }
@@ -178,7 +178,7 @@ impl StreamIsolator {
         let stream = self.streams.remove(name);
 
         if stream.is_none() {
-            return Err(DslError::Other(format!("Stream {} not found", name)));
+            return Err(DslError::Other(format!("Stream {name} not found")));
         }
 
         // Terminate thread pool
@@ -187,7 +187,7 @@ impl StreamIsolator {
             debug!("Waiting for {} threads to terminate", threads.len());
         }
 
-        info!("Stream {} removed from isolation", name);
+        info!("Stream {name} removed from isolation");
         Ok(())
     }
 
@@ -203,8 +203,7 @@ impl StreamIsolator {
 
             if usage > limit_bytes {
                 warn!(
-                    "Stream {} exceeds memory quota: {}MB > {}MB",
-                    stream_name,
+                    "Stream {stream_name} exceeds memory quota: {}MB > {}MB",
                     usage / 1_048_576,
                     stream.quota.max_memory_mb
                 );
@@ -212,8 +211,7 @@ impl StreamIsolator {
                 // In production, would implement actual memory limiting
                 // For now, just log the violation
                 return Err(DslError::ResourceExhaustion(format!(
-                    "Stream {} memory quota exceeded",
-                    stream_name
+                    "Stream {stream_name} memory quota exceeded",
                 )));
             }
         }
@@ -232,8 +230,8 @@ impl StreamIsolator {
 
             if usage > stream.quota.max_cpu_percent {
                 debug!(
-                    "Throttling CPU for stream {}: {:.1}% > {:.1}%",
-                    stream_name, usage, stream.quota.max_cpu_percent
+                    "Throttling CPU for stream {stream_name}: {:.1}% > {:.1}%",
+                    usage, stream.quota.max_cpu_percent
                 );
 
                 // In production, would implement actual CPU throttling
@@ -250,7 +248,7 @@ impl StreamIsolator {
             let mut panic_count = stream.panic_count.lock().unwrap();
             *panic_count += 1;
 
-            error!("Stream {} panicked (count: {})", stream_name, *panic_count);
+            error!("Stream {stream_name} panicked (count: {panic_count})");
 
             if *panic_count > 3 {
                 // Too many panics, remove the stream
@@ -327,10 +325,10 @@ impl StreamIsolator {
         if let Some(stream) = self.streams.get(name) {
             let mut stream = stream.lock().unwrap();
             stream.quota = quota;
-            info!("Updated resource quota for stream {}", name);
+            info!("Updated resource quota for stream {name}");
             Ok(())
         } else {
-            Err(DslError::Other(format!("Stream {} not found", name)))
+            Err(DslError::Other(format!("Stream {name} not found")))
         }
     }
 }

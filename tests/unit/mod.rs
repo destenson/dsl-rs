@@ -53,29 +53,29 @@ mod core_tests {
     fn test_stream_state_transitions() {
         // Test valid transitions
         assert_eq!(
-            StreamState::Idle.next_state(TransitionCondition::OnSuccess),
+            StreamState::Idle.next_state(TransitionCondition::Success),
             Some(StreamState::Starting)
         );
         assert_eq!(
-            StreamState::Starting.next_state(TransitionCondition::OnSuccess),
+            StreamState::Starting.next_state(TransitionCondition::Success),
             Some(StreamState::Running)
         );
         assert_eq!(
-            StreamState::Running.next_state(TransitionCondition::OnError),
+            StreamState::Running.next_state(TransitionCondition::Error),
             Some(StreamState::Recovering)
         );
         assert_eq!(
-            StreamState::Recovering.next_state(TransitionCondition::OnSuccess),
+            StreamState::Recovering.next_state(TransitionCondition::Success),
             Some(StreamState::Running)
         );
         assert_eq!(
-            StreamState::Running.next_state(TransitionCondition::OnStop),
+            StreamState::Running.next_state(TransitionCondition::Stop),
             Some(StreamState::Stopping)
         );
         
         // Test invalid transition
         assert_eq!(
-            StreamState::Idle.next_state(TransitionCondition::OnError),
+            StreamState::Idle.next_state(TransitionCondition::Error),
             None
         );
     }
@@ -445,10 +445,10 @@ mod property_tests {
             
             for t in transitions {
                 let condition = match t {
-                    0 => TransitionCondition::OnSuccess,
-                    1 => TransitionCondition::OnError,
-                    2 => TransitionCondition::OnStop,
-                    _ => TransitionCondition::OnRecovery,
+                    0 => TransitionCondition::Success,
+                    1 => TransitionCondition::Error,
+                    2 => TransitionCondition::Stop,
+                    _ => TransitionCondition::Recovery,
                 };
                 
                 if let Some(new_state) = state.next_state(condition) {

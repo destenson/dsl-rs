@@ -37,7 +37,7 @@ impl FileSourceRobust {
 
         // Create filesrc element
         let filesrc = gst::ElementFactory::make("filesrc")
-            .name(format!("{}_filesrc", name))
+            .name(format!("{name}_filesrc"))
             .property("location", path.to_str().unwrap())
             .build()
             .map_err(|_| DslError::Source("Failed to create filesrc".to_string()))?;

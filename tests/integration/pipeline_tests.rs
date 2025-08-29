@@ -217,27 +217,27 @@ async fn test_pipeline_state_transitions() {
     assert_eq!(state_machine.get_state("test"), StreamState::Idle);
     
     // Start stream
-    let new_state = state_machine.transition("test", TransitionCondition::OnSuccess);
+    let new_state = state_machine.transition("test", TransitionCondition::Success);
     assert_eq!(new_state, Some(StreamState::Starting));
     
     // Stream running
-    let new_state = state_machine.transition("test", TransitionCondition::OnSuccess);
+    let new_state = state_machine.transition("test", TransitionCondition::Success);
     assert_eq!(new_state, Some(StreamState::Running));
     
     // Error occurs
-    let new_state = state_machine.transition("test", TransitionCondition::OnError);
+    let new_state = state_machine.transition("test", TransitionCondition::Error);
     assert_eq!(new_state, Some(StreamState::Recovering));
     
     // Recovery succeeds
-    let new_state = state_machine.transition("test", TransitionCondition::OnSuccess);
+    let new_state = state_machine.transition("test", TransitionCondition::Success);
     assert_eq!(new_state, Some(StreamState::Running));
     
     // Stop stream
-    let new_state = state_machine.transition("test", TransitionCondition::OnStop);
+    let new_state = state_machine.transition("test", TransitionCondition::Stop);
     assert_eq!(new_state, Some(StreamState::Stopping));
     
     // Stream stopped
-    let new_state = state_machine.transition("test", TransitionCondition::OnSuccess);
+    let new_state = state_machine.transition("test", TransitionCondition::Success);
     assert_eq!(new_state, Some(StreamState::Stopped));
 }
 

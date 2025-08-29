@@ -195,6 +195,12 @@ pub struct StreamHealth {
     pub recovery_attempts: u32,
 }
 
+impl Default for StreamHealth {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StreamHealth {
     pub fn new() -> Self {
         Self {
@@ -213,7 +219,7 @@ impl StreamHealth {
 }
 
 pub fn init_gstreamer() -> DslResult<()> {
-    gst::init().map_err(|e| DslError::GStreamer(e))?;
+    gst::init().map_err(DslError::GStreamer)?;
     info!("GStreamer initialized successfully");
     Ok(())
 }

@@ -131,7 +131,7 @@ impl HealthMonitor {
 
     pub fn register_stream(&self, name: String, health: Arc<Mutex<StreamHealth>>) {
         self.streams.insert(name.clone(), health);
-        info!("Registered stream {} for health monitoring", name);
+        info!("Registered stream {name} for health monitoring");
         self.log_event(HealthAlert {
             timestamp: Instant::now(),
             severity: AlertSeverity::Info,
@@ -142,7 +142,7 @@ impl HealthMonitor {
 
     pub fn unregister_stream(&self, name: &str) {
         if self.streams.remove(name).is_some() {
-            info!("Unregistered stream {} from health monitoring", name);
+            info!("Unregistered stream {name} from health monitoring");
             self.log_event(HealthAlert {
                 timestamp: Instant::now(),
                 severity: AlertSeverity::Info,
@@ -420,7 +420,7 @@ mod tests {
         for i in 0..3 {
             let mut health = StreamHealth::new();
             health.state = StreamState::Running;
-            monitor.register_stream(format!("stream_{}", i), Arc::new(Mutex::new(health)));
+            monitor.register_stream(format!("stream_{i}"), Arc::new(Mutex::new(health)));
         }
 
         let report = monitor.generate_report();
@@ -437,7 +437,7 @@ mod tests {
             monitor.log_event(HealthAlert {
                 timestamp: Instant::now(),
                 severity: AlertSeverity::Info,
-                stream: Some(format!("stream_{}", i)),
+                stream: Some(format!("stream_{i}")),
                 message: "Test alert".to_string(),
             });
         }

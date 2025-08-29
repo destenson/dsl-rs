@@ -68,7 +68,7 @@ impl RtspSinkRobust {
     pub fn new(name: String, config: RtspServerConfig) -> DslResult<Self> {
         // Create RTSP sink element
         let rtsp_sink = gst::ElementFactory::make("rtspclientsink")
-            .name(format!("{}_rtspsink", name))
+            .name(format!("{name}_rtspsink"))
             .property(
                 "location",
                 format!("rtsp://127.0.0.1:{}{}", config.port, config.mount_point),
@@ -161,7 +161,7 @@ impl RtspSinkRobust {
         // Add RTP payloader
         launch.push_str("rtph264pay name=pay0 pt=96 ");
 
-        launch.push_str(")");
+        launch.push(')');
 
         launch
     }
@@ -202,7 +202,7 @@ impl RtspSinkRobust {
                     .insert(client_id.clone(), client_info);
                 *total.lock().unwrap() += 1;
 
-                info!("New client connected to {}: {}", name, client_id);
+                info!("New client connected to {name}: {client_id}");
             });
         });
     }
@@ -211,8 +211,8 @@ impl RtspSinkRobust {
         if let Some(client) = self.clients.lock().unwrap().remove(client_id) {
             let duration = client.connected_at.elapsed();
             info!(
-                "Client {} disconnected from {} after {:?}",
-                client_id, self.name, duration
+                "Client {client_id} disconnected from {} after {duration:?}",
+                self.name
             );
         }
     }

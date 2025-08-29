@@ -54,11 +54,11 @@ fn main() -> DslResult<()> {
         info!("Processing directory: {:?}", source_path);
 
         // Read all video files from directory
-        for entry in fs::read_dir(&source_path).map_err(|e| {
-            dsl_rs::core::DslError::FileIo(format!("Failed to read directory: {}", e))
-        })? {
+        for entry in fs::read_dir(&source_path)
+            .map_err(|e| dsl_rs::core::DslError::FileIo(format!("Failed to read directory: {e}")))?
+        {
             let entry = entry.map_err(|e| {
-                dsl_rs::core::DslError::FileIo(format!("Failed to read entry: {}", e))
+                dsl_rs::core::DslError::FileIo(format!("Failed to read entry: {e}"))
             })?;
             let path = entry.path();
 
@@ -99,12 +99,12 @@ fn main() -> DslResult<()> {
         let file_name = video_path
             .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or(&format!("stream_{}", index))
+            .unwrap_or(&format!("stream_{index}"))
             .to_string();
-        info!("Setting up pipeline for: {}", file_name);
+        info!("Setting up pipeline for: {file_name}");
 
         // Create file source for this video
-        let stream_name = format!("stream_{}", file_name);
+        let stream_name = format!("stream_{file_name}");
         let file_source = Box::new(FileSourceRobust::new(
             stream_name.clone(),
             video_path.clone(),
@@ -120,13 +120,13 @@ fn main() -> DslResult<()> {
         let stream_id =
             futures::executor::block_on(stream_manager.add_source(file_source, stream_config))?;
 
-        info!("Added source stream: {} (ID: {})", file_name, stream_id);
+        info!("Added source stream: {file_name} (ID: {stream_id})");
         stream_ids.push(stream_id.clone());
 
         // Create a file sink for recording/transcoding
         let recording_config = RotationConfig {
             directory: PathBuf::from("./recordings"),
-            base_filename: format!("output_{}", file_name),
+            base_filename: format!("output_{file_name}"),
             enable_size_rotation: true,
             max_file_size: 100 * 1024 * 1024, // 100MB per file
             enable_time_rotation: false,
@@ -135,14 +135,14 @@ fn main() -> DslResult<()> {
         };
 
         let file_sink = Box::new(FileSinkRobust::new(
-            format!("{}_sink", stream_name),
+            format!("{stream_name}_sink"),
             recording_config,
         )?);
 
         // Connect the sink to the stream
         futures::executor::block_on(stream_manager.add_sink(file_sink, &stream_id))?;
 
-        info!("Connected sink to stream: {}", file_name);
+        info!("Connected sink to stream: {file_name}");
     }
 
     info!(
@@ -158,7 +158,7 @@ fn main() -> DslResult<()> {
         iteration += 1;
 
         // Check health of all streams
-        info!("=== Status Update (iteration {}) ===", iteration);
+        info!("=== Status Update (iteration {iteration}) ===");
         for (index, stream_id) in stream_ids.iter().enumerate() {
             if let Some(health) = stream_manager.get_stream_health(stream_id) {
                 info!(
@@ -191,8 +191,8 @@ fn main() -> DslResult<()> {
     // Clean shutdown of all streams
     for stream_id in stream_ids {
         match futures::executor::block_on(stream_manager.remove_source(&stream_id)) {
-            Ok(_) => info!("Successfully removed stream: {}", stream_id),
-            Err(e) => warn!("Error removing stream {}: {:?}", stream_id, e),
+            Ok(_) => info!("Successfully removed stream: {stream_id}"),
+            Err(e) => warn!("Error removing stream {stream_id}: {:?}", e),
         }
     }
 

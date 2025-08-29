@@ -53,11 +53,11 @@ impl FileSinkRobust {
     pub fn new(name: String, config: RotationConfig) -> DslResult<Self> {
         // Ensure directory exists
         fs::create_dir_all(&config.directory)
-            .map_err(|e| DslError::FileIo(format!("Failed to create directory: {}", e)))?;
+            .map_err(|e| DslError::FileIo(format!("Failed to create directory: {e}")))?;
 
         // Create filesink element
         let filesink = gst::ElementFactory::make("filesink")
-            .name(format!("{}_filesink", name))
+            .name(format!("{name}_filesink"))
             .property("sync", false)
             .property("async", false)
             .build()
@@ -65,7 +65,7 @@ impl FileSinkRobust {
 
         // Create muxer (MP4 by default)
         let mux = gst::ElementFactory::make("mp4mux")
-            .name(format!("{}_mux", name))
+            .name(format!("{name}_mux"))
             .property("fragment-duration", 1000u32) // 1 second fragments
             .property("streamable", true)
             .build()
@@ -181,8 +181,8 @@ impl FileSinkRobust {
             let current_size = *self.current_file_size.lock().unwrap();
             if current_size >= self.config.max_file_size {
                 debug!(
-                    "File size {} exceeds max {}, rotating",
-                    current_size, self.config.max_file_size
+                    "File size {current_size} exceeds max {}, rotating",
+                    self.config.max_file_size
                 );
                 needs_rotation = true;
             }
@@ -193,8 +193,8 @@ impl FileSinkRobust {
             let elapsed = self.rotation_start_time.lock().unwrap().elapsed();
             if elapsed >= self.config.rotation_interval {
                 debug!(
-                    "Time elapsed {:?} exceeds interval {:?}, rotating",
-                    elapsed, self.config.rotation_interval
+                    "Time elapsed {elapsed:?} exceeds interval {:?}, rotating",
+                    self.config.rotation_interval
                 );
                 needs_rotation = true;
             }
@@ -212,10 +212,7 @@ impl FileSinkRobust {
                 let _ = fs::remove_file(test_file);
                 Ok(())
             }
-            Err(e) => Err(DslError::FileIo(format!(
-                "Cannot write to directory: {}",
-                e
-            ))),
+            Err(e) => Err(DslError::FileIo(format!("Cannot write to directory: {e}"))),
         }
     }
 
@@ -228,7 +225,7 @@ impl FileSinkRobust {
     }
 
     async fn handle_write_error(&mut self, error: &str) -> DslResult<()> {
-        error!("Write error for sink {}: {}", self.name, error);
+        error!("Write error for sink {}: {error}", self.name);
 
         // Check if it's a disk space issue
         if error.contains("space") || error.contains("full") {

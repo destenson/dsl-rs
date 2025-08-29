@@ -35,7 +35,7 @@ impl Default for CircuitBreakerConfig {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum CircuitState {
+pub enum CircuitState {
     Closed,   // Normal operation
     Open,     // Blocking requests
     HalfOpen, // Testing recovery
@@ -122,7 +122,7 @@ impl CircuitBreaker {
 }
 
 #[derive(Debug, Clone)]
-struct FailurePattern {
+pub struct FailurePattern {
     timestamp: Instant,
     error_type: String,
     stream_name: String,
@@ -192,6 +192,12 @@ pub struct RecoveryStats {
     pub avg_recovery_time: Option<Duration>,
 }
 
+impl Default for RecoveryManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RecoveryManager {
     pub fn new() -> Self {
         Self {
@@ -205,7 +211,7 @@ impl RecoveryManager {
 
     pub fn set_policy(&self, stream_name: String, policy: RecoveryPolicy) {
         self.policies.insert(stream_name.clone(), policy);
-        info!("Set recovery policy for stream: {}", stream_name);
+        info!("Set recovery policy for stream: {stream_name}");
     }
 
     pub fn set_retry_config(&self, stream_name: String, config: RetryConfig) {
@@ -215,7 +221,7 @@ impl RecoveryManager {
     pub fn enable_circuit_breaker(&self, stream_name: String, config: CircuitBreakerConfig) {
         let breaker = Arc::new(Mutex::new(CircuitBreaker::new(config)));
         self.circuit_breakers.insert(stream_name.clone(), breaker);
-        info!("Enabled circuit breaker for stream: {}", stream_name);
+        info!("Enabled circuit breaker for stream: {stream_name}");
     }
 
     pub fn should_attempt_recovery(&self, stream_name: &str) -> bool {
@@ -223,7 +229,7 @@ impl RecoveryManager {
             let mut breaker = breaker.lock().unwrap();
             let allowed = breaker.should_allow_request();
             if !allowed {
-                debug!("Circuit breaker preventing recovery for: {}", stream_name);
+                debug!("Circuit breaker preventing recovery for: {stream_name}");
             }
             allowed
         } else {
@@ -257,12 +263,12 @@ impl RecoveryManager {
         // Determine action based on policy
         let action = match policy {
             RecoveryPolicy::Immediate => {
-                debug!("Immediate recovery for {}", stream_name);
+                debug!("Immediate recovery for {stream_name}");
                 RecoveryAction::Retry
             }
             RecoveryPolicy::FixedDelay => {
                 let delay = Duration::from_millis(500);
-                debug!("Fixed delay recovery for {} ({:?})", stream_name, delay);
+                debug!("Fixed delay recovery for {stream_name} ({:?})", delay);
                 std::thread::sleep(delay);
                 RecoveryAction::Retry
             }
@@ -275,8 +281,8 @@ impl RecoveryManager {
 
                 let delay = self.calculate_exponential_delay(&config, attempt);
                 debug!(
-                    "Exponential backoff recovery for {} ({:?})",
-                    stream_name, delay
+                    "Exponential backoff recovery for {stream_name} ({:?})",
+                    delay
                 );
                 std::thread::sleep(delay);
 
@@ -333,7 +339,7 @@ impl RecoveryManager {
     fn record_failure(&self, stream_name: &str, error: &DslError) {
         let pattern = FailurePattern {
             timestamp: Instant::now(),
-            error_type: format!("{:?}", error),
+            error_type: format!("{error:?}"),
             stream_name: stream_name.to_string(),
         };
 
@@ -375,7 +381,7 @@ impl RecoveryManager {
             breaker.state = CircuitState::Closed;
             breaker.failure_count = 0;
             breaker.success_count = 0;
-            info!("Reset circuit breaker for stream: {}", stream_name);
+            info!("Reset circuit breaker for stream: {stream_name}");
         }
     }
 
