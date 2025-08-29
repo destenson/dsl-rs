@@ -79,9 +79,6 @@ jobs:
     - name: Run tests
       run: cargo test --verbose
     
-    - name: Run integration tests
-      run: cargo test --test '*' --verbose
-    
     - name: Install Python dependencies
       if: runner.os == 'Linux'
       run: |
